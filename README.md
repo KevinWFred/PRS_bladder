@@ -1,4 +1,4 @@
-# PRS for bladder cancer cancer in European population
+# PRS for bladder cancer in European population
 
 - Goal  
 The goal of the study is to build polygenic risk score (PRS) for bladder cancer in European population.  
