@@ -541,3 +541,88 @@ run_assosum2=function(tmpdir=1,sumstatfile="../result/six10k_sumstats.txt",prefi
   
   return(Lassosumauc_val)
 }
+
+#24 GWAS snps
+gwasdat1=read_excel("../data/Supplemental Tables_R1_clean.xlsx",sheet=15,skip=3)
+gwasdat2=read_excel("../data/Supplemental Tables_R1_clean.xlsx",sheet=16,skip=2)
+gwasdat2=gwasdat2[1:24,]
+sum(gwasdat1$Position %in% gwasdat2$Position)
+which(!gwasdat1$Position %in% gwasdat2$Position) #14
+#gwasdat1[14,] #very close to another snps
+idx=match(gwasdat2$Position,gwasdat1$Position)
+gwasdat1=gwasdat1[idx,]
+gwasdat2$SNP=gwasdat1$SNP
+gwasdat=gwasdat2
+rm(gwasdat1,gwasdat2)
+
+sumdat=as.data.frame(fread("../result/metano610_sumstat.txt"))
+idx=match(gwasdat$SNP,sumdat$rsid)
+quantile(sumdat$`P-value`[idx])
+# 0%         25%         50%         75%        100% 
+# 9.96300e-31 1.02340e-11 1.04975e-08 2.02250e-06 4.14600e-04 
+which(sumdat$rsid=="rs36209093") #9517218
+sumdat[9517218,] #A1:t,A2:c
+sum(gwasdat$SNP %in% sumdat$rsid) #24
+write.table(gwasdat$SNP,file="../result/Bladder_gwas24.snp",row.names = F,col.names=F,quote=F)
+bim=as.data.frame(fread("../result/six10k_test.bim"))
+which(bim$V2=="rs36209093") #0
+tmp=data.frame(SNP=sumdat$rsid[idx],A1=sumdat$Allele1[idx],Effect=sumdat$Effect[idx])
+tmp$A1=toupper(tmp$A1)
+write.table(tmp,file="../result/metano610_score.txt",row.names = F,col.names = T,sep="\t",quote=F)
+cmd=paste0("/usr/local/apps/plink/2.3-alpha/plink2 --pfile ../result/six10k_test --extract ../result/Bladder_gwas24.snp --score ../result/metano610_score.txt cols=+scoresums,-scoreavgs header no-mean-imputation --out ../result/Bladder_gwas24")
+system(cmd)
+
+#check on original 610K data
+plink2="/usr/local/apps/plink/2.3-alpha/plink2"
+snppos=data.frame(chr=gwasdat$chr,start=gwasdat$Position,end=gwasdat$Position,name=gwasdat$SNP)
+write.table(snppos,file="../result/Bladder_gwas24snp.range",row.names = F,col.names = F,sep=" ",quote=F)
+
+extractsnp=function(infolder="/data/BB_Bioinformatics/ProjectData/Bladder/Imputed_data/610K/",
+                    outfolder="../result/gwas_24snp/",prefix="Bladder_gwas24")
+{
+  allchrs=unique(snppos$chr)
+  allchrs=allchrs[!allchrs %in% c("X","Y")]
+  for (i in 1:length(allchrs))
+  {
+    chr=allchrs[i]
+    cmd=paste0(plink2," --vcf ",infolder,"chr",chr,".dose.vcf.gz  --extract range ../result/Bladder_gwas24snp.range --memory 64000 --threads 8 --make-pgen --out ",outfolder,prefix,"_chr",chr)
+    system(cmd)
+  }
+}
+
+mergedat=function(outfolder="../result/gwas_24snp/",prefix="Bladder_gwas24")
+{
+  allfiles=list.files(outfolder,paste0(prefix,"_chr\\w*.pvar"))
+  tmp=data.frame(prefix=paste0(outfolder,allfiles))
+  tmp$prefix=gsub(".pvar","",tmp$prefix)
+  write.table(tmp,file=paste0(outfolder,prefix,"_merglist.txt"),row.names = F,col.names = F,quote=F)
+  cmd=paste0(plink2," --pmerge-list ",outfolder,prefix,"_merglist.txt --make-pgen --out ",outfolder,prefix)
+  system(cmd)
+  #cmd=paste0(plink2," --pfile ",outfolder,prefix," --recode A-transpose --out ",outfolder,prefix)
+  #system(cmd)
+}#recover 22 snps
+
+bim=read.table("../result/gwas_24snp/Bladder_gwas24.pvar")
+idx=match(bim$V2,gwasdat$Position)
+tmp=1:24
+tmp[!tmp %in% idx] #3 and 4 are missing
+gwasdat$SNP[c(3,4)] #"rs10936599" "rs710521" 
+tmp=data.frame(oldname=bim$V3,newname=gwasdat$SNP[idx])
+write.table(tmp,file="../result/gwas_24snp/Bladder_gwas24_updatename.txt",row.names = F,col.names = F,quote=F,sep="\t")
+cmd=paste0(plink2," --pfile ../result/gwas_24snp/Bladder_gwas24 --update-name ../result/gwas_24snp/Bladder_gwas24_updatename.txt --make-pgen --out ../result/gwas_24snp/Bladder_gwas24")
+system(cmd)
+cmd=paste0("/usr/local/apps/plink/2.3-alpha/plink2 --pfile ../result/gwas_24snp/Bladder_gwas24 --extract ../result/Bladder_gwas24.snp --score ../result/metano610_score.txt cols=+scoresums,-scoreavgs header no-mean-imputation list-variants --out ../result/Bladder_gwas24")
+system(cmd)
+tmp=read.table("../result/Bladder_gwas24.sscore.vars")
+idx=match(tmp$V1,gwasdat$SNP)
+tmp=1:24
+tmp[!tmp %in% idx]#1,3,4
+gwasdat$SNP[1]
+#[1] "rs36209093"
+tmp=read.table("../result/gwas_24snp/Bladder_gwas24.pvar")
+tmp[1,c(3:5)]
+#rs36209093  A  C
+idx=match(gwasdat$SNP,sumdat$rsid)
+tmp1=data.frame(SNP=sumdat$rsid[idx],A1=sumdat$Allele1[idx],A2=sumdat$Allele2[idx],Effect=sumdat$Effect[idx])
+#rs36209093  t  c 
+prs_24gwas=read.table("../result/Bladder_gwas24.sscore")
