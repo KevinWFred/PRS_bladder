@@ -1,36 +1,53 @@
 #!/usr/bin/env Rscript
 .libPaths(c("/data/wangx53",.libPaths()))
 library(data.table)
+plink="/usr/local/apps/plink/1.9/plink"
+plink2="/usr/local/apps/plink/2.3-alpha/plink2"
 #work on 610K individual data
 #tmp=fread("../result/imputation/chr22.traw",nrows=10000)
 pheno=read.csv("../data/PHENOTYPE_BLADDERGWAS_02102022_SK.csv")
+pheno$TGSID[which(pheno$TGSID=="#N/A")]=NA
 #system("cp ../result/imputation/merged.psam ../result/imputation/merged.psam.orig")
 #system("cp ../result/imputation/merged.fam ../result/imputation/merged.fam.orig")
-tmp=fread("../result/imputation/merged.psam")
-idx=match(tmp$`#IID`,pheno$TGSID)
-idx1=which(is.na(idx))
-idx2=match(tmp$`#IID`[idx1],pheno$study_pid)
-idx[idx1]=idx2
-sum(is.na(idx))
-tmp$SEX=pheno$gender[idx]
-tmp$SEX[which(tmp$SEX=="FEMALE")]=2
-tmp$SEX[which(tmp$SEX=="MALE")]=1
-tmp$Pheno=1
-tmp$Pheno[which(pheno$casecontrol[idx]=="CASE")]=2
-write.table(tmp,file="../result/imputation/merged.psam",sep=" ",quote=F,row.names = F)
+#pick samples from 3 studies
 
-tmp=fread("../result/imputation/merged.fam")
-idx=match(tmp$V2,pheno$TGSID)
+six10dat=read.table("/data/BB_Bioinformatics/ProjectData/Bladder/Phenotype_data/Overall/610K/snptest.def",header=T)
+six10dat=six10dat[-1,]
+six10dat$ID=NA
+idx=match(six10dat$ID_1,pheno$study_pid)
+six10dat$ID=pheno$study_pid[idx]
 idx1=which(is.na(idx))
-idx2=match(tmp$V2[idx1],pheno$study_pid)
-idx[idx1]=idx2
-sum(is.na(idx))
-tmp$V5=pheno$gender[idx]
-tmp$V5[which(tmp$V5=="FEMALE")]=2
-tmp$V5[which(tmp$V5=="MALE")]=1
-tmp$V6=1
-tmp$V6[which(pheno$casecontrol[idx]=="CASE")]=2
-write.table(tmp,file="../result/imputation/merged.fam",sep=" ",quote=F,row.names = F)
+idx2=match(six10dat$ID_1[idx1],pheno$TGSID)
+six10dat$ID[idx1]=pheno$study_pid[idx2]
+sum(is.na(six10dat$ID))
+
+#restric to def file
+idx=which(pheno$study %in% c("CPSII","NEBL","MDACC") & pheno$Illumina_Array=="610K")
+table(pheno$casecontrol[idx])
+all3studies=pheno$study_pid[idx]
+all3studies=intersect(all3studies,six10dat$ID)
+tmp=data.frame(FMID=0,IID=all3studies)
+#write.table(tmp,file="../result/six10k_plinksample.txt",quote=F, row.names=F, col.names=F)
+
+idx=match(all3studies,pheno$study_pid)
+all3studies_case=all3studies[pheno$casecontrol[idx]=="CASE"]
+all3studies_control=all3studies[!all3studies %in% all3studies_case]
+set.seed(1000)
+idx1=sample(1:length(all3studies_case),0.5*length(all3studies_case))
+idx2=sample(1:length(all3studies_control),0.5*length(all3studies_control))
+tunsamples=c(all3studies_case[idx1],all3studies_control[idx2])
+# idx=sample(1:length(all3studies),0.5*length(all3studies))
+# tunsamples=all3studies[idx]
+valsamples=all3studies[!all3studies %in% tunsamples]
+pheno$cig_cat=factor(pheno$cig_cat,levels=c("NEVER","FORMER","OCCASIONAL","CURRENT"))
+pheno$y=0
+pheno$y[which(pheno$casecontrol=="CASE")]=1
+model1 <- glm(y~cig_cat, data=pheno[pheno$study_pid %in% valsamples,],family = "binomial")
+summary(model1)
+coeff1 =coef(model1)
+exp(coeff1)
+exp(confint(model1))
+
 
 #transform to rsid
 .libPaths(c("/data/wangx53",.libPaths()))
@@ -53,83 +70,99 @@ findrsid=function(dat)
   
   ## this gives us a GPos object
   my_snps = as.data.frame(my_snps)
-  
   idx = match(paste0(dat$chr,":",dat$pos),paste0(my_snps$seqnames,":",my_snps$pos))
+  dat$rsid=my_snps$RefSNP_id[idx]
   dat$rsid=my_snps$RefSNP_id[idx]
   table(is.na(dat$rsid))
   return(dat)
 }
 dat=findrsid(dat)
-write.table(dat$snp[!is.na(dat$rsid)],file="../result/six60k_snpid.txt",row.names = F,col.names = F,quote=F)
-cmd=paste0("/usr/local/apps/plink/2.3-alpha/plink2 --pfile ../result/imputation/merged --extract ../result/six60k_snpid.txt --make-pgen --out ../result/imputation/merged")
+tmp=data.frame(oldname=dat$snp,newname=dat$rsid)
+tmp=tmp[!is.na(tmp$newname),]
+write.table(tmp,file="../result/merged_updatename.txt",row.names = F,col.names = F,quote=F,sep="\t")
+cmd=paste0(plink2," --pfile ../result/imputation/merged --update-name ../result/merged_updatename.txt --make-pgen --out ../result/imputation/merged_rsid")
 system(cmd)
-tmp=as.data.frame(fread("../result/imputation/merged.pvar"))
-idx=match(tmp$ID,dat$snp)
-tmp$ID=dat$rsid[idx]
-write.table(tmp,file="../result/imputation/merged.pvar", sep=" ",row.names = F,quote=F)
 
 #generate training/testing data
-tmp=fread("../result/imputation/merged.psam")
-set.seed(1000) #sample0
-trainidx=sample(1:nrow(tmp),floor(nrow(tmp)/2))
-trainsample=data.frame(FMID=0,IID=tmp$`#IID`[trainidx])
-table(tmp$Pheno[trainidx])
-# 1    2 
-# 2697 1831 
 
-testidx=1:nrow(tmp)
-testidx=testidx[!testidx %in% trainidx]
-table(tmp$Pheno[testidx])
-# 1    2 
-# 2722 1807
-testsample=data.frame(FMID=0,IID=tmp$`#IID`[testidx])
-#EAS_never_train_plinksample.txt uses seed 1000
+trainsample=data.frame(FMID=0,IID=tunsamples)
+trainidx=match(tunsamples,pheno$study_pid)
+table(pheno$y[trainidx])
+# 0    1 
+# 1384 1307
+
+testidx=match(valsamples,pheno$study_pid)
+table(pheno$y[testidx])
+# 0    1 
+# 1385 1307
+testsample=data.frame(FMID=0,IID=valsamples)
 write.table(trainsample,file="../result/six10k_train_plinksample.txt",quote=F, row.names=F, col.names=F)
 write.table(testsample,file="../result/six10k_test_plinksample.txt",quote=F, row.names=F, col.names=F)
 
-cmd=paste("/usr/local/apps/plink/2.3-alpha/plink2 --bfile ../result/imputation/merged --freq",
-          "--out ../result/six10k")
+# cmd=paste("/usr/local/apps/plink/2.3-alpha/plink2 --pfile ../result/imputation/merged_rsid --keep ../result/six10k_plinksample.txt --maf 0.01 ",
+#           "--make-pgen --out ../result/six10k_maf01")
+# system(cmd)
+
+# cmd=paste("/usr/local/apps/plink/2.3-alpha/plink2 --pfile ../result/six10k_maf01 --freq ",
+#           "--out ../result/six10k_maf01")
+# system(cmd)
+# tmp=fread("../result/six10k_maf01.afreq")
+cmd=paste("/usr/local/apps/plink/2.3-alpha/plink2 --pfile ../result/imputation/merged_rsid --keep ../result/six10k_plinksample.txt --maf 0.01 ",
+          "--make-bed --out ../result/six10k_maf01")
 system(cmd)
-tmp=fread("../result/six10k.afreq")
-cmd=paste("/usr/local/apps/plink/2.3-alpha/plink2 --pfile ../result/imputation/merged --keep ../result/six10k_train_plinksample.txt ",
+
+cmd=paste("/usr/local/apps/plink/2.3-alpha/plink2 --pfile ../result/imputation/merged_rsid --keep ../result/six10k_train_plinksample.txt ",
           "--make-pgen --out ../result/six10k_train")
 system(cmd)
 
-cmd=paste("/usr/local/apps/plink/2.3-alpha/plink2 --pfile ../result/imputation/merged --keep ../result/six10k_test_plinksample.txt ",
+cmd=paste("/usr/local/apps/plink/2.3-alpha/plink2 --pfile ../result/imputation/merged_rsid --keep ../result/six10k_test_plinksample.txt ",
           "--make-pgen --out ../result/six10k_test")
 system(cmd)
 
-cmd=paste("/usr/local/apps/plink/2.3-alpha/plink2 --bfile ../result/imputation/merged --keep ../result/six10k_train_plinksample.txt ",
+cmd=paste("/usr/local/apps/plink/2.3-alpha/plink2 --bfile ../result/six10k_maf01 --keep ../result/six10k_train_plinksample.txt --maf 0.01 --geno 0.05 ",
           "--make-bed --out ../result/six10k_train")
 system(cmd)
-cmd=paste("/usr/local/apps/plink/2.3-alpha/plink2 --bfile ../result/imputation/merged --keep ../result/six10k_test_plinksample.txt ",
-          "--make-bed --out ../result/six10k_test")
+tmp=fread("../result/six10k_train.bim")
+write.table(tmp$V2,file="../result/six10k_train.snp",row.names = F,col.names = F,quote=F)
+cmd=paste("/usr/local/apps/plink/2.3-alpha/plink2 --pfile ../result/imputation/merged_rsid --keep ../result/six10k_test_plinksample.txt ",
+          "--extract ../result/six10k_train.snp --make-bed --out ../result/six10k_test")
 system(cmd)
 cmd=paste("/usr/local/apps/plink/2.3-alpha/plink2 --bfile ../result/six10k_train --freq",
-          "--out ../result/six10k_train")
+          " --out ../result/six10k_train")
 system(cmd)
 tmp=fread("../result/six10k_train.afreq")
-idx=which(tmp$ALT_FREQS<0.01 | tmp$ALT_FREQS>0.99)
+quantile(tmp$ALT_FREQS)
+
 tmp1=fread("../result/six10k_train.bim")
 tmp2=fread("../result/six10k_test.bim")
 all(tmp1$V5==tmp2$V5) #T
 tmp3=fread("../result/six10k_test.pvar")
-all(tmp1$V5==tmp3$ALT) #T
+idx=match(tmp2$V2,tmp3$ID)
+all(tmp2$V5==tmp3$ALT[idx]) #T
+# tmp4=fread("../result/six10k_sumstats.txt")
+# #to make the sumstats consistent with individual genotype (target data)
+# idx=match(tmp2$V2,tmp4$rsid)
+# all(tmp2$V5==tmp4$a1[idx],na.rm=T) #T
 
-#to make the sumstats consistent with individual genotype (target data)
-
+#to make sumstat for LDpred2
+#six10k_sumstats.txt
 library(bigsnpr)
 options(bigstatsr.check.parallel.blas = FALSE)
 options(default.nproc.blas = NULL)
 formsumstats=function(sumstatfile="../result/metano610_sumstat.txt",
                       prefix_tun="../result/six10k_train",outprefix="six10k")
 {
-  sumdat=as.data.frame(fread(sumstatfile)) #11404730
+  sumdat=as.data.frame(fread(sumstatfile)) #11439205
   dat=data.frame(snp=sumdat$MarkerName,chr=sumdat$CHR,pos=sumdat$BP)
   dat=findrsid(dat)
-  table(sumdat$rsid==dat$rsid)
+  idx=which(!grepl("^rs",sumdat$rsid))
+  sumdat$rsid[idx]=NA
+  table(sumdat$rsid==dat$rsid,useNA="ifany")
+  table(is.na(sumdat$rsid),is.na(dat$rsid))
   sumdat$rsid=dat$rsid
-  sumdat=sumdat[!is.na(sumdat$rsid),]
+  idx=which(is.na(sumdat$rsid))
+  sumdat$rsid[idx]=paste0(sumdat$CHR[idx],sumdat$BP[idx])
+  #sumdat=sumdat[!is.na(sumdat$rsid),]
   idx=which(colnames(sumdat) %in% c("chromosome","CHR"))
   if (length(idx)>0) colnames(sumdat)[idx]="chr"
   idx=which(colnames(sumdat) %in% c("position","BP"))
@@ -140,11 +173,8 @@ formsumstats=function(sumstatfile="../result/metano610_sumstat.txt",
   if (length(idx)>0) colnames(sumdat)[idx]="a1" #effect
   idx=which(colnames(sumdat) %in% c("alleleA","Reference.allele","Allele2"))
   if (length(idx)>0) colnames(sumdat)[idx]="a0"
-  idx=which(colnames(sumdat) %in% c("cases_total","N_cases","ncases"))
-  if (length(idx)>0) colnames(sumdat)[idx]="ncases"
-  idx=which(colnames(sumdat) %in% c("controls_total","N_controls","ncontrols"))
-  if (length(idx)>0) colnames(sumdat)[idx]="ncontrols"
-  sumdat$n_eff=4/(1/sumdat$ncases +1/sumdat$ncontrols)
+  
+  sumdat$n_eff=4*sumdat$neff
   
   idx=which(colnames(sumdat) %in% c("frequentist_add_beta_1","Effect"))
   if (length(idx)>0) colnames(sumdat)[idx]="beta"
@@ -177,13 +207,96 @@ formsumstats=function(sumstatfile="../result/metano610_sumstat.txt",
   # table(sumstats1$beta==info_snp$beta)
   # table(sumstats1$a0==info_snp$a0)
   # all(sumstats1$beta_se==info_snp$beta_se)
+  # 11,439,205 variants to be matched.
+  # 1,007,146 ambiguous SNPs have been removed.
+  # 5,692,816 variants have been matched; 0 were flipped and 2,574,539 were reversed.
   sumstats=data.frame(chr=info_snp$chr,pos=info_snp$pos,rsid=info_snp$rsid,a0=info_snp$a0,a1=info_snp$a1,n_eff=info_snp$n_eff,beta_se=info_snp$beta_se,p=info_snp$p,beta=info_snp$beta)
-  write.table(sumstats,file=paste0("../result/",outprefix,"_sumstats.txt"),row.names = F,sep="\t",quote=F)
+  fwrite(sumstats,file=paste0("../result/",outprefix,"_sumstats.txt"),row.names = F,sep="\t",quote=F)
   #return(sumstats)
 }
 
-plink="/usr/local/apps/plink/1.9/plink"
+#24 GWAS snps
+gwasdat1=as.data.frame(read_excel("../data/Supplemental Tables_R1_clean.xlsx",sheet=15,skip=3))
+gwasdat2=as.data.frame(read_excel("../data/Supplemental Tables_R1_clean.xlsx",sheet=16,skip=2))
+gwasdat2=gwasdat2[1:24,]
+sum(gwasdat1$Position %in% gwasdat2$Position)
+which(!gwasdat1$Position %in% gwasdat2$Position) #14
+#gwasdat1[14,] #very close to another snps
+idx=match(gwasdat2$Position,gwasdat1$Position)
+gwasdat1=gwasdat1[idx,]
+gwasdat2$SNP=gwasdat1$SNP
+gwasdat=gwasdat2
+#we explored a strong association signal for a low-quality imputed marker, rs36209093 (p = 3.21  1018; Supplementary Table 4, Supplementary Fig. 3). A proxy mar- ker (chr1:110229772) effectively tagged the GSTM1 deletion, improving the association signal (p = 8.84  1023)
+#gwsdat$SNP[1] is not correct
+#use ID instead
+gwasdat$ID=paste0(gwasdat$chr,":",gwasdat$Position)
+rm(gwasdat1,gwasdat2)
+
+sumdat=as.data.frame(fread("../result/metano610_sumstat.txt"))
+idx=which(!grepl("^rs",sumdat$rsid))
+sumdat$rsid[idx]=paste0(sumdat$CHR[idx],":",sumdat$BP[idx])
+idx=match(gwasdat$ID,sumdat$MarkerName)
+quantile(sumdat$`P-value`[idx])
+# 0%          25%          50%          75%         100% 
+# 8.932000e-33 2.164125e-11 4.898000e-08 6.541250e-07 2.712000e-05
+
+write.table(sumdat$rsid[idx],file="../result/Bladder_gwas24.snp",row.names = F,col.names=F,quote=F)
+bim=as.data.frame(fread("../result/six10k_test.bim"))
+which(bim$V2=="1:110229772") #1
+tmp=data.frame(SNP=sumdat$rsid[idx],A1=sumdat$Allele1[idx],Effect=sumdat$Effect[idx])
+tmp$A1=toupper(tmp$A1)
+write.table(tmp,file="../result/metano610_score.txt",row.names = F,col.names = T,sep="\t",quote=F)
+cmd=paste0("/usr/local/apps/plink/2.3-alpha/plink2 --pfile ../result/imputation/merged_rsid --extract ../result/Bladder_gwas24.snp --score ../result/metano610_score.txt cols=+scoresums,-scoreavgs header no-mean-imputation --out ../result/Bladder1_gwas24")
+system(cmd)
+
+#check on original 610K data
 plink2="/usr/local/apps/plink/2.3-alpha/plink2"
+snppos=data.frame(chr=gwasdat$chr,start=gwasdat$Position,end=gwasdat$Position,name=gwasdat$SNP)
+write.table(snppos,file="../result/Bladder_gwas24snp.range",row.names = F,col.names = F,sep=" ",quote=F)
+
+extractsnp=function(infolder="/data/BB_Bioinformatics/ProjectData/Bladder/Imputed_data/610K/",
+                    outfolder="../result/gwas_24snp/",prefix="Bladder_gwas24")
+{
+  allchrs=unique(snppos$chr)
+  allchrs=allchrs[!allchrs %in% c("X","Y")]
+  for (i in 1:length(allchrs))
+  {
+    chr=allchrs[i]
+    cmd=paste0(plink2," --vcf ",infolder,"chr",chr,".dose.vcf.gz  --extract range ../result/Bladder_gwas24snp.range --memory 64000 --threads 8 --make-pgen --out ",outfolder,prefix,"_chr",chr)
+    system(cmd)
+  }
+}
+extractsnp()
+mergedat=function(outfolder="../result/gwas_24snp/",prefix="Bladder_gwas24")
+{
+  allfiles=list.files(outfolder,paste0(prefix,"_chr\\w*.pvar"))
+  tmp=data.frame(prefix=paste0(outfolder,allfiles))
+  tmp$prefix=gsub(".pvar","",tmp$prefix)
+  write.table(tmp,file=paste0(outfolder,prefix,"_merglist.txt"),row.names = F,col.names = F,quote=F)
+  cmd=paste0(plink2," --pmerge-list ",outfolder,prefix,"_merglist.txt --make-pgen --out ",outfolder,prefix)
+  system(cmd)
+  #cmd=paste0(plink2," --pfile ",outfolder,prefix," --recode A-transpose --out ",outfolder,prefix)
+  #system(cmd)
+}#recover 22 snps
+mergedat()
+bim=read.table("../result/gwas_24snp/Bladder_gwas24.pvar")
+idx=match(bim$V2,gwasdat$Position)
+tmp=1:24
+tmp[!tmp %in% idx] #0 are missing
+tmp=data.frame(oldname=bim$V3,newname=gwasdat$SNP[idx])
+tmp$newname[1]=tmp$oldname[1]
+write.table(tmp,file="../result/gwas_24snp/Bladder_gwas24_updatename.txt",row.names = F,col.names = F,quote=F,sep="\t")
+cmd=paste0(plink2," --pfile ../result/gwas_24snp/Bladder_gwas24 --update-name ../result/gwas_24snp/Bladder_gwas24_updatename.txt --make-pgen --out ../result/gwas_24snp/Bladder_gwas24")
+system(cmd)
+cmd=paste0("/usr/local/apps/plink/2.3-alpha/plink2 --pfile ../result/gwas_24snp/Bladder_gwas24 --extract ../result/Bladder_gwas24.snp --score ../result/metano610_score.txt cols=+scoresums,-scoreavgs header no-mean-imputation list-variants --out ../result/Bladder_gwas24")
+system(cmd)
+tmp=read.table("../result/Bladder_gwas24.sscore.vars")
+tmp1=read.table("../result/Bladder_gwas24.sscore")
+tmp2=read.table("../result/Bladder1_gwas24.sscore")
+cor(tmp1$V4,tmp2$V5)
+#[1] 0.9974624
+prs_24gwas=read.table("../result/Bladder_gwas24.sscore")
+
 runCT=function(sumstatfile="../result/six10k_sumstats.txt",prefix_tun="../result/six10k_train",prefix_val="../result/six10k_test",outprefix="six10k")
 {
   #CT method
@@ -236,6 +349,8 @@ runCT=function(sumstatfile="../result/six10k_sumstats.txt",prefix_tun="../result
   return(CTauc_val)
 }
 
+tmp=runCT()
+
 #LDpred2
 library(bigsnpr)
 options(bigstatsr.check.parallel.blas = FALSE)
@@ -260,7 +375,7 @@ run_ldpred2=function(tmpdir=1,sumstatfile="../result/six10k_sumstats.txt",prefix
   #3. Load and transform the summary statistic file
   #Load summary statistic file
   # Read in the summary statistic file
-  sumdat=as.data.frame(fread(sumstatfile)) #6081186
+  sumdat=as.data.frame(fread(sumstatfile)) #5692816
   print("sumdat dim:")
   print(dim(sumdat))
   # LDpred 2 require the header to follow the exact naming. a1 :effect allelle
@@ -269,7 +384,7 @@ run_ldpred2=function(tmpdir=1,sumstatfile="../result/six10k_sumstats.txt",prefix
   sumstats <- bigreadr::fread2(paste0(sumstatfile,".ldpred")) 
   
   # Filter out hapmap SNPs
-  sumstats <- sumstats[sumstats$rsid%in% info$rsid,] #1005601
+  sumstats <- sumstats[sumstats$rsid%in% info$rsid,] #997935
   print("sumstat in HM3:")
   print(nrow(sumstats))
   #3. Calculate the LD matrix
@@ -321,6 +436,7 @@ run_ldpred2=function(tmpdir=1,sumstatfile="../result/six10k_sumstats.txt",prefix
       ld <- Matrix::colSums(corr0^2)
       corr <- as_SFBM(corr0, tmp)
     } else {
+      ld0=Matrix::colSums(corr0^2)
       ld <- c(ld, Matrix::colSums(corr0^2))
       corr$add_columns(corr0, nrow(corr))
     }
@@ -352,7 +468,7 @@ run_ldpred2=function(tmpdir=1,sumstatfile="../result/six10k_sumstats.txt",prefix
   # Get adjusted beta from grid model
   set.seed(1000) # to get the same result every time
   beta_grid <-
-    snp_ldpred2_grid(corr, df_beta, grid.param, ncores = NCORES)
+    snp_ldpred2_grid(corr, df_beta, grid.param, ncores = 1)
   
   
   famtun=read.table(paste0(prefix_tun,".fam"))
@@ -404,6 +520,7 @@ run_ldpred2=function(tmpdir=1,sumstatfile="../result/six10k_sumstats.txt",prefix
   return(LDpredauc_val)
 }
 
+tmp1=run_ldpred2()
 run_assosum2=function(tmpdir=1,sumstatfile="../result/six10k_sumstats.txt",prefix_tun="../result/six10k_train",prefix_val="../result/six10k_test",outprefix="six10k")
 {
   print(sumstatfile)
@@ -541,88 +658,5 @@ run_assosum2=function(tmpdir=1,sumstatfile="../result/six10k_sumstats.txt",prefi
   
   return(Lassosumauc_val)
 }
+tmp2=run_assosum2()
 
-#24 GWAS snps
-gwasdat1=read_excel("../data/Supplemental Tables_R1_clean.xlsx",sheet=15,skip=3)
-gwasdat2=read_excel("../data/Supplemental Tables_R1_clean.xlsx",sheet=16,skip=2)
-gwasdat2=gwasdat2[1:24,]
-sum(gwasdat1$Position %in% gwasdat2$Position)
-which(!gwasdat1$Position %in% gwasdat2$Position) #14
-#gwasdat1[14,] #very close to another snps
-idx=match(gwasdat2$Position,gwasdat1$Position)
-gwasdat1=gwasdat1[idx,]
-gwasdat2$SNP=gwasdat1$SNP
-gwasdat=gwasdat2
-rm(gwasdat1,gwasdat2)
-
-sumdat=as.data.frame(fread("../result/metano610_sumstat.txt"))
-idx=match(gwasdat$SNP,sumdat$rsid)
-quantile(sumdat$`P-value`[idx])
-# 0%         25%         50%         75%        100% 
-# 9.96300e-31 1.02340e-11 1.04975e-08 2.02250e-06 4.14600e-04 
-which(sumdat$rsid=="rs36209093") #9517218
-sumdat[9517218,] #A1:t,A2:c
-sum(gwasdat$SNP %in% sumdat$rsid) #24
-write.table(gwasdat$SNP,file="../result/Bladder_gwas24.snp",row.names = F,col.names=F,quote=F)
-bim=as.data.frame(fread("../result/six10k_test.bim"))
-which(bim$V2=="rs36209093") #0
-tmp=data.frame(SNP=sumdat$rsid[idx],A1=sumdat$Allele1[idx],Effect=sumdat$Effect[idx])
-tmp$A1=toupper(tmp$A1)
-write.table(tmp,file="../result/metano610_score.txt",row.names = F,col.names = T,sep="\t",quote=F)
-cmd=paste0("/usr/local/apps/plink/2.3-alpha/plink2 --pfile ../result/six10k_test --extract ../result/Bladder_gwas24.snp --score ../result/metano610_score.txt cols=+scoresums,-scoreavgs header no-mean-imputation --out ../result/Bladder_gwas24")
-system(cmd)
-
-#check on original 610K data
-plink2="/usr/local/apps/plink/2.3-alpha/plink2"
-snppos=data.frame(chr=gwasdat$chr,start=gwasdat$Position,end=gwasdat$Position,name=gwasdat$SNP)
-write.table(snppos,file="../result/Bladder_gwas24snp.range",row.names = F,col.names = F,sep=" ",quote=F)
-
-extractsnp=function(infolder="/data/BB_Bioinformatics/ProjectData/Bladder/Imputed_data/610K/",
-                    outfolder="../result/gwas_24snp/",prefix="Bladder_gwas24")
-{
-  allchrs=unique(snppos$chr)
-  allchrs=allchrs[!allchrs %in% c("X","Y")]
-  for (i in 1:length(allchrs))
-  {
-    chr=allchrs[i]
-    cmd=paste0(plink2," --vcf ",infolder,"chr",chr,".dose.vcf.gz  --extract range ../result/Bladder_gwas24snp.range --memory 64000 --threads 8 --make-pgen --out ",outfolder,prefix,"_chr",chr)
-    system(cmd)
-  }
-}
-
-mergedat=function(outfolder="../result/gwas_24snp/",prefix="Bladder_gwas24")
-{
-  allfiles=list.files(outfolder,paste0(prefix,"_chr\\w*.pvar"))
-  tmp=data.frame(prefix=paste0(outfolder,allfiles))
-  tmp$prefix=gsub(".pvar","",tmp$prefix)
-  write.table(tmp,file=paste0(outfolder,prefix,"_merglist.txt"),row.names = F,col.names = F,quote=F)
-  cmd=paste0(plink2," --pmerge-list ",outfolder,prefix,"_merglist.txt --make-pgen --out ",outfolder,prefix)
-  system(cmd)
-  #cmd=paste0(plink2," --pfile ",outfolder,prefix," --recode A-transpose --out ",outfolder,prefix)
-  #system(cmd)
-}#recover 22 snps
-
-bim=read.table("../result/gwas_24snp/Bladder_gwas24.pvar")
-idx=match(bim$V2,gwasdat$Position)
-tmp=1:24
-tmp[!tmp %in% idx] #3 and 4 are missing
-gwasdat$SNP[c(3,4)] #"rs10936599" "rs710521" 
-tmp=data.frame(oldname=bim$V3,newname=gwasdat$SNP[idx])
-write.table(tmp,file="../result/gwas_24snp/Bladder_gwas24_updatename.txt",row.names = F,col.names = F,quote=F,sep="\t")
-cmd=paste0(plink2," --pfile ../result/gwas_24snp/Bladder_gwas24 --update-name ../result/gwas_24snp/Bladder_gwas24_updatename.txt --make-pgen --out ../result/gwas_24snp/Bladder_gwas24")
-system(cmd)
-cmd=paste0("/usr/local/apps/plink/2.3-alpha/plink2 --pfile ../result/gwas_24snp/Bladder_gwas24 --extract ../result/Bladder_gwas24.snp --score ../result/metano610_score.txt cols=+scoresums,-scoreavgs header no-mean-imputation list-variants --out ../result/Bladder_gwas24")
-system(cmd)
-tmp=read.table("../result/Bladder_gwas24.sscore.vars")
-idx=match(tmp$V1,gwasdat$SNP)
-tmp=1:24
-tmp[!tmp %in% idx]#1,3,4
-gwasdat$SNP[1]
-#[1] "rs36209093"
-tmp=read.table("../result/gwas_24snp/Bladder_gwas24.pvar")
-tmp[1,c(3:5)]
-#rs36209093  A  C
-idx=match(gwasdat$SNP,sumdat$rsid)
-tmp1=data.frame(SNP=sumdat$rsid[idx],A1=sumdat$Allele1[idx],A2=sumdat$Allele2[idx],Effect=sumdat$Effect[idx])
-#rs36209093  t  c 
-prs_24gwas=read.table("../result/Bladder_gwas24.sscore")

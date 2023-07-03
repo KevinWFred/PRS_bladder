@@ -35,4 +35,4 @@ v <- fit3$estimates$`Covariance matrix of parameter estimates` # the covariance 
 
 save(fit2,fit3,file="../result/GENESIS.RData")
 
-#sbatch --mem=64g --cpus-per-task=41 --time=3-1:00:00 --gres=lscratch:64  /data/BB_Bioinformatics/Kevin/GWAS_Bladder/code/genesis.R
+#sbatch --mem=64g --cpus-per-task=41 --time=17:00:00 --gres=lscratch:64  /data/BB_Bioinformatics/Kevin/GWAS_Bladder/code/genesis.R

@@ -215,7 +215,9 @@ plotqq=function(data,optbreak=1,title="")
 }
 meta=as.data.frame(fread("/data/BB_Bioinformatics/Kevin/GWAS_Bladder/result/Overall_no6101.tbl"))
 #count sample size,add chr,pos, hg19
-meta$ncontrols=meta$ncases=0
+meta$Allele1=toupper(meta$Allele1)
+meta$Allele2=toupper(meta$Allele2)
+meta$neff=0 #1/(1/ncase+1/ncotrol)
 tmp=unlist(strsplit(meta$MarkerName,":"))
 meta$CHR=as.integer(tmp[seq(1,length(tmp),2)])
 meta$BP=as.integer(tmp[seq(2,length(tmp),2)])
@@ -231,28 +233,76 @@ updatemeta=function(myfile="/data/BB_Bioinformatics/ProjectData/Bladder/Summarie
   {
     meta$rsid[idx2]=dat$ID[idx1]
   }
-  meta$ncontrols[idx2]=meta$ncontrols[idx2]+dat$CONTROLS_Num[idx1]
-  meta$ncases[idx2]=meta$ncases[idx2]+dat$CASES_Num[idx1]
-  
+  meta$neff[idx2]=meta$neff[idx2]+1/(1/dat$CONTROLS_Num[idx1]+1/dat$CASES_Num[idx1])
   return(meta)
 }
 meta=updatemeta()
+meta=updatemeta(myfile="../result/six10kGWAS.txt")
 meta=updatemeta(myfile="/data/BB_Bioinformatics/ProjectData/Bladder/Summaries/summary/Overall/2.5M/out.plink.rsq03.01.txt")
-max(meta$ncontrols)
+max(meta$neff)
 meta=updatemeta(myfile="/data/BB_Bioinformatics/ProjectData/Bladder/Summaries/summary/Overall/660W/out.plink.rsq03.01.txt")
-max(meta$ncontrols)
+max(meta$neff)
 meta=updatemeta(myfile="/data/BB_Bioinformatics/ProjectData/Bladder/Summaries/summary/Overall/CNIO/Overall_a_ordered_matched.plink.rsq03.maf01.txt")
-max(meta$ncontrols)
+max(meta$neff)
 meta=updatemeta(myfile="/data/BB_Bioinformatics/ProjectData/Bladder/Summaries/summary/Overall/OmniX_1/out.plink.rsq03.01.txt")
-max(meta$ncontrols)
+max(meta$neff)
 meta=updatemeta(myfile="/data/BB_Bioinformatics/ProjectData/Bladder/Summaries/summary/Overall/OmniX_2/out.plink.rsq03.01.txt")
-max(meta$ncontrols)
+max(meta$neff)
 meta=updatemeta(myfile="/data/BB_Bioinformatics/ProjectData/Bladder/Summaries/summary/Overall/Oncoarray/out.plink.rsq03.01.txt")
-max(meta$ncontrols)
+max(meta$neff)
 meta=updatemeta(myfile="/data/BB_Bioinformatics/ProjectData/Bladder/Summaries/summary/Overall/deCODE/DECODE.Bladder_Cancer_05052017.180516.matched.plink.rsq03.maf01.txt")
-max(meta$ncontrols)
-meta$N=1/(1/meta$ncases+1/meta$ncontrols)
-write.table(meta,file="../result/metano610_sumstat.txt",sep="\t",quote=F,row.names = F)
+max(meta$neff)
+meta$N=as.integer(meta$neff)
+table(is.na(meta$rsid))
+idx=which(is.na(meta$rsid))
+
+library(BSgenome.Hsapiens.UCSC.hg19)
+library(SNPlocs.Hsapiens.dbSNP155.GRCh37)
+genome <- BSgenome.Hsapiens.UCSC.hg19
+all_snps <- SNPlocs.Hsapiens.dbSNP155.GRCh37
+seqlevelsStyle(genome) <- "NCBI"
+
+dat=data.frame(snp=meta$MarkerName[idx],chr=meta$CHR[idx],pos=meta$BP[idx])
+findrsid=function(dat)
+{
+  dat$rsid=NA
+  ## construct a GPos object containing all the positions we're interested in
+  positions <- GPos(seqnames = dat$chr, pos = dat$pos)
+  
+  ## query the genome with out positions
+  my_snps <- snpsByOverlaps(all_snps, positions, genome = genome)
+  
+  ## this gives us a GPos object
+  my_snps = as.data.frame(my_snps)
+  
+  idx = match(paste0(dat$chr,":",dat$pos),paste0(my_snps$seqnames,":",my_snps$pos))
+  dat$rsid=my_snps$RefSNP_id[idx]
+  table(is.na(dat$rsid))
+  return(dat)
+}
+dat=findrsid(dat)
+tmp=dat$rsid
+tmp=tmp[!is.na(tmp)]
+table(tmp %in% meta$rsid)
+dat$rsid[which(dat$rsid %in% meta$rsid)]=NA
+idx=match(dat$snp,meta$MarkerName)
+meta$rsid[idx]=dat$rsid
+fwrite(meta,file="../result/metano610_sumstat.txt",sep="\t",quote=F,row.names = F)
+#24 GWAS snps
+library(readxl)
+gwasdat1=read_excel("../data/Supplemental Tables_R1_clean.xlsx",sheet=15,skip=3)
+gwasdat2=read_excel("../data/Supplemental Tables_R1_clean.xlsx",sheet=16,skip=2)
+gwasdat2=gwasdat2[1:24,]
+sum(gwasdat1$Position %in% gwasdat2$Position)
+which(!gwasdat1$Position %in% gwasdat2$Position) #14
+#gwasdat1[14,] #very close to another snps
+idx=match(gwasdat2$Position,gwasdat1$Position)
+gwasdat1=gwasdat1[idx,]
+gwasdat2$SNP=gwasdat1$SNP
+gwasdat=gwasdat2
+table(gwasdat$SNP %in% meta$rsid) #T
+idx=match(gwasdat$SNP,meta$rsid)
+
 meta1 = meta %>% 
   mutate(CHR = as.integer(CHR),
          BP = as.integer(BP),
@@ -264,7 +314,7 @@ meta1 = meta %>%
   select(rsid,CHR,BP,FREQ_A1,P,N)
 meta1=meta1[!is.na(meta1$rsid),]
 meta1=meta1[meta1$FREQ_A1>0.01 & meta1$FREQ_A1<0.99,]
-sum(meta1$P<5e-8) #394
+sum(meta1$P<5e-8) #401
 png(filename = "../result/QQplot_metano610.png", width = 8, height = 8, units = "in",res=300)
 plotqq(data=meta1,optbreak=1,title="")
 dev.off()

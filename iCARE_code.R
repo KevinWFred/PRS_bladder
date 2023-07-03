@@ -144,7 +144,7 @@ computrisk=function(startage=30,interval=10,opt="start")
 
 #10 years risk
 risk10=NULL
-for (i in 1:40)
+for (i in 0:40)
 {
   myrisk=computrisk(startage = 30+i)
   risk10=rbind(risk10,myrisk)

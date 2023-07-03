@@ -157,7 +157,7 @@ CIplot(data=projct,title="CT, one million controls",prefix="CT_CI_onem")
 CIplot(data=projct,y="onem",high="onem_low",low="onem_high",title="CT, one million controls",prefix="CT_CI_onem")
 CIplot(data=projct,y="control10",high="control10_low",low="control10_high",title="CT, control case ratio 10:1",prefix="CT_CI_control10")
 
-threeplot=function(data=projCT,title="CT",prefix="CT_3curve",ylim=c(0.5,0.67))
+threeplot=function(data=projCT,title="CT",prefix="CT_3curve",ylim=c(0.5,0.75))
 {
   scatplot=ggplot(data=data,aes(x=n))+geom_line(aes(y =equal,color="Equal number of cases and controls"), alpha=0.5,linewidth=2) +
     geom_line(aes(y = onem,color="One million controls"), alpha=0.5,linewidth=2) +

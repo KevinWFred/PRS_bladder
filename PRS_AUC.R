@@ -14,8 +14,23 @@ library(dbplyr)
 famtrain=read.table("../result/six10k_train.fam")
 #validation samples
 famtest=read.table("../result/six10k_test.fam")
+changesampleid=function(id=tmp$`#IID`)
+{
+  dat=data.frame(id=id,study_pid=NA,TGSID=NA)
+  tmp=intersect(dat$id,pheno$study_pid)
+  idx1=match(tmp,dat$id)
+  idx2=match(tmp,pheno$study_pid)
+  dat$study_pid[idx1]=pheno$study_pid[idx2]
+  tmp=intersect(dat$id,pheno$TGSID)
+  idx1=match(tmp,dat$id)
+  idx2=match(tmp,pheno$TGSID)
+  dat$study_pid[idx1]=pheno$study_pid[idx2]
+  if (sum(is.na(dat$study_pid))>0) stop("samples ID missing")
+  return(dat$study_pid)
+}
 
 phenotype=read.csv("../data/PHENOTYPE_BLADDERGWAS_02102022_SK.csv")
+pheno=phenotype
 idx=match(c(famtrain$V2,famtest$V2),phenotype$TGSID)
 idx1=which(is.na(idx))
 idx2=match(c(famtrain$V2,famtest$V2)[idx1],phenotype$study_pid)
@@ -27,15 +42,13 @@ phenotype$y=0
 phenotype$y[which(phenotype$casecontrol=="CASE")]=1
 pcadat=fread("../result/merged.eigenvec")
 colnames(pcadat)[2:ncol(pcadat)]=c("ID",paste0("EV",1:20))
-idx=match(pcadat$ID,phenotype$ID)
+tmp=changesampleid(id=pcadat$ID)
+idx=match(phenotype$ID,tmp)
 phenotype=cbind(phenotype,pcadat[idx,3:12])
 idx=which(phenotype=="MISSING",arr.ind=T)
 phenotype[idx]=NA
 phenotype$cig_cat=factor(phenotype$cig_cat,levels=c("NEVER","FORMER","OCCASIONAL","CURRENT"))
-#CT
 
-#p-value cutoffs (consistent with ../result/range_list)
-pthres <- c(5E-08,5E-07,5E-06,5E-05,5E-05,5E-03,5E-02,5E-01,1) 
 
 RISCA_AUC=function(allprs=CT_never$allprs)
 {
@@ -55,6 +68,7 @@ RISCA_AUC=function(allprs=CT_never$allprs)
   pheno.prs=pheno.prs[idx,]
   roc_obj_ipw = roc.binary(status = "y", estimator = "ipw",
                            variable = "prs",
+                           #confounders = ~1,
                            confounders = ~EV1+EV2+EV3+EV4+EV5+EV6+
                              EV7+EV8+EV9+EV10+Age_cat+gender,
                            data = pheno.prs,
@@ -130,6 +144,10 @@ get_aucs=function(allprs)
   return(list(auc=auc,auc_val=auc_val,aucadj=aucadj))
 }
 
+
+#CT
+#p-value cutoffs (consistent with ../result/range_list)
+pthres <- c(5E-08,5E-07,5E-06,5E-05,5E-05,5E-03,5E-02,5E-01,1) 
 CT_prs=function(prsprefix_tun="../result/six10k_tun.p_value_",prsprefix_val="../result/six10k_val.p_value_")
 {
   #find the optimal cutoff
@@ -148,7 +166,7 @@ CT_prs=function(prsprefix_tun="../result/six10k_tun.p_value_",prsprefix_val="../
   }
   idx_optimal=which.max(auc_tun)
   clumpedsnp=fread("../result/six10k.clumped")
-  sum(clumpedsnp$P<=pthres[idx_optimal]) #43 snps (P<5e-6) used
+  sum(clumpedsnp$P<=pthres[idx_optimal]) #20 snps (P<5e-7) used
   prs_tun=read.table(paste0(prsprefix_tun,idx_optimal,".sscore"))
   colnames(prs_tun)[2]="ID"
   colnames(prs_tun)[6]="prs"
@@ -165,20 +183,14 @@ CT_prs=function(prsprefix_tun="../result/six10k_tun.p_value_",prsprefix_val="../
   return(list(aucs=aucs,idx_optimal=idx_optimal,allprs=allprs))
 }
 CTres=CT_prs()
-# [1] "auc:"
-# tun       val
-# 1 0.5691807 0.5954291
-# auc_low  auc_high
-# 1 0.578456 0.6118222
-# auc   auc_low auc_high
-# 1 0.5972794 0.5809919 0.614729
+
 
 CT_5e8prs=function(prsprefix_tun="../result/six10k_tun.p_value_",prsprefix_val="../result/six10k_val.p_value_")
 {
   
   idx_optimal=1 #5e-8
   clumpedsnp=fread("../result/six10k.clumped")
-  sum(clumpedsnp$P<=pthres[1]) #15 snps (P<5e-6) used
+  sum(clumpedsnp$P<=pthres[1]) #14 snps (P<5e-8) used
   prs_tun=read.table(paste0(prsprefix_tun,idx_optimal,".sscore"))
   colnames(prs_tun)[2]="ID"
   colnames(prs_tun)[6]="prs"
@@ -194,7 +206,7 @@ CT_5e8prs=function(prsprefix_tun="../result/six10k_tun.p_value_",prsprefix_val="
   
   return(list(aucs=aucs,idx_optimal=idx_optimal,allprs=allprs))
 }
-CT5e8res=CT5e8_prs()
+CT5e8res=CT_5e8prs()
 # [1] "auc:"
 # tun       val
 # 1 0.5641449 0.5909213
@@ -284,7 +296,7 @@ prs_or_quantiles=function(allprs=CTprs$allprs,main="",ytext=0.25)
 
 
 png("../result/CT_prsquantiles.png",pointsize = 8,res=300,width=960,height=960)
-CTres_OR=prs_or_quantiles(allprs=CTres$allprs,main="CT",ytext = 0.27)
+CTres_OR=prs_or_quantiles(allprs=CTres$allprs,main="CT",ytext = 0.12)
 dev.off()
 # or   or_low  or_high
 # 1 1.40138 1.317046 1.492062
@@ -293,7 +305,7 @@ dev.off()
 LDpred_prs=function(LDpredrda="../result/LDpred_six10k_pred.RData")
 {
   load(LDpredrda)
-  dim(df_beta)# 1004587 snps
+  dim(df_beta)# 997935 snps
   auc_tun=rep(0,ncol(pred_grid))
   phenotype1=phenotype[match(famtrain$V2,phenotype$ID),]
   for (i in 1:ncol(pred_grid))
@@ -326,10 +338,9 @@ LDpredres=LDpred_prs()
 
 #write.table(LDpredres$allprs,file="../result/LDpred_prs.csv",sep=",",quote=F,row.names = F)
 png("../result/LDpred_prsquantiles.png",pointsize = 8,res=300,width=960,height=960)
-LDpredres_OR=prs_or_quantiles(allprs=LDpredres$allprs,main="LDpred2",ytext=0.27)
+LDpredres_OR=prs_or_quantiles(allprs=LDpredres$allprs,main="LDpred2",ytext=0.22)
 dev.off()
-# or   or_low or_high
-# 1 1.395213 1.311029 1.48574
+
 
 #Lassosum2
 Lassosum_prs=function(Lassosumrda="../result/Lassosum2_six10k_pred.RData")
@@ -368,7 +379,7 @@ Lassosumres=Lassosum_prs()
 
 #write.table(Lassosumres$allprs,file="../result/Lassosum_prs.csv",sep=",",quote=F,row.names = F)
 png("../result/Lassosum_prsquantiles.png",pointsize = 8,res=300,width=960,height=960)
-Lassosumres_OR=prs_or_quantiles(allprs=Lassosumres$allprs,main="Lassosum2",ytext=0.23)
+Lassosumres_OR=prs_or_quantiles(allprs=Lassosumres$allprs,main="Lassosum2",ytext=0.16)
 dev.off()
 # or or_low or_high
 # 1 1.395983 1.3114 1.48701
@@ -437,7 +448,7 @@ PRSCS_prs=function(PRS_tun=PRScs_tun,PRS_val=PRScs_val)
     auc_tun$EUR[i]=as.numeric(pROC::auc(pheno.prs$y,predicted1,quiet=T))
   }
   allbeta=as.data.frame(fread("../result/prscs/six10k_pst_eff_a1_b0.5_.prs_coeff"))
-  dim(allbeta) #1063497
+  dim(allbeta) #1054023
   idx_optimal=which.max(auc_tun$EUR)
   allprs=data.frame(ID=c(PRS_tun$sample,PRS_val$sample),prs=c(PRS_tun[,idx_optimal+1],
                PRS_val[,idx_optimal+1]))
@@ -453,7 +464,7 @@ PRScsres=PRSCS_prs()
 # auc   auc_low  auc_high
 # 1 0.5813707 0.5646171 0.5985561
 png("../result/PRScs_prsquantiles.png",pointsize = 8,res=300,width=960,height=960)
-PRScs_OR=prs_or_quantiles(allprs=PRScsres$allprs,main="PRS-CS",ytext=0.23)
+PRScs_OR=prs_or_quantiles(allprs=PRScsres$allprs,main="PRS-CS",ytext=0.22)
 dev.off()
 # or   or_low  or_high
 # 1 1.334052 1.254841 1.419003
@@ -465,16 +476,17 @@ gwas24=function()
 {
   prs=read.table("../result/Bladder_gwas24.sscore")
   colnames(prs)[1]="ID"
-  colnames(prs)[4]="prs"
+  colnames(prs)[ncol(prs)]="prs"
   pheno.prs=merge(phenotype,prs,by="ID")
   allprs=data.frame(ID=pheno.prs$ID,prs=pheno.prs$prs)
   aucs=get_aucs(allprs=allprs)
   
   return(list(aucs=aucs,allprs=allprs))
 }
+GWAS24res=gwas24()
 
 png("../result/GWAS24_prsquantiles.png",pointsize = 8,res=300,width=960,height=960)
-GWAS24_OR=prs_or_quantiles(allprs=GWAS24res$allprs,main="GWAS24",ytext = 0.2)
+GWAS24_OR=prs_or_quantiles(allprs=GWAS24res$allprs,main="GWAS24",ytext = 0.07)
 dev.off()
 
 #add smoking into the model
@@ -493,7 +505,7 @@ AUCSmokingPrsBoot = function(data,indices){
   return(c(auc))
 }
 
-smokingmodel=function(allprs=GWAS24res$allprs)
+smokingmodel=function(allprs=CTres$allprs)
 {
   auc=data.frame(smoking=NA,smoking_low=NA,smoking_high=NA,prs=NA,prs_low=NA,prs_high=NA,
                  smokingprs=NA,smokingprs_low=NA,smokingprs_high=NA)
@@ -507,6 +519,7 @@ smokingmodel=function(allprs=GWAS24res$allprs)
                  OCCASIONAL=NA,OCCASIONAL_low=NA,OCCASIONAL_high=NA,
                  CURRENT=NA,CURRENT_low=NA,CURRENT_high=NA)
   pheno.prs=merge(phenotype,allprs,by="ID")
+  pheno.prs=pheno.prs[pheno.prs$ID %in% famtest$V2,]
   pheno.prs=myscale(pheno.prs)
   
   model1 <- glm(y~cig_cat, data=pheno.prs[pheno.prs$ID %in% famtest$V2,],family = "binomial")
@@ -576,6 +589,8 @@ smokingmodel=function(allprs=GWAS24res$allprs)
   return(list(auc,OR1,OR2,OR3))
   
 }
-Smokingres=list(auc,OR1,OR2,OR3)
+Smokingres=smokingmodel()
+
+save(CTres,CT5e8res,LDpredres,Lassosumres,GWAS24res,file="../result/PRS_res.RData")
 
 save(CTres,CT5e8res,LDpredres,Lassosumres,PRScsres,GWAS24res,Smokingres,file="../result/PRS_res.RData")
