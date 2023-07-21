@@ -160,11 +160,12 @@ CIplot(data=projct,y="control10",high="control10_low",low="control10_high",title
 threeplot=function(data=projCT,title="CT",prefix="CT_3curve",ylim=c(0.5,0.75))
 {
   scatplot=ggplot(data=data,aes(x=n))+geom_line(aes(y =equal,color="Equal number of cases and controls"), alpha=0.5,linewidth=2) +
+    geom_line(aes(y = control4,color="Control case ratio 4:1"), alpha=0.5,linewidth=2) +
     geom_line(aes(y = onem,color="One million controls"), alpha=0.5,linewidth=2) +
     geom_line(aes(y = control10,color="Control case ratio 10:1"), alpha=0.5,linewidth=2) +
     scale_colour_manual("", 
-                        breaks = c("Equal number of cases and controls", "One million controls", "Control case ratio 10:1"),
-                        values = c("#E64B35FF", "#00A087FF", "#3C5488FF")) + ylim(ylim) +
+                        breaks = c("Equal number of cases and controls", "Control case ratio 4:1","One million controls", "Control case ratio 10:1"),
+                        values = c("#3C5488FF", "#00A087FF", "#F39B7FFF","#E64B35FF")) + ylim(ylim) +
     labs(x = "Number of cases in the GWAS for training PRS",
          y = "AUC",
          linetype = "",
@@ -180,6 +181,29 @@ threeplot=function(data=projCT,title="CT",prefix="CT_3curve",ylim=c(0.5,0.75))
 }
 threeplot(data=projCT,title="CT",prefix="CT_3curve")
 
+threeplot1=function(data=projCT,title="CT",prefix="CT_3curve",ylim=c(0.5,0.75))
+{
+  scatplot=ggplot(data=data,aes(x=n))+geom_line(aes(y =equal,color="Equal number of cases and controls"), alpha=0.5,linewidth=2) +
+    geom_line(aes(y = control3,color="Control case ratio 3:1"), alpha=0.5,linewidth=2) +
+    geom_line(aes(y = onem,color="One million controls"), alpha=0.5,linewidth=2) +
+    geom_line(aes(y = control10,color="Control case ratio 10:1"), alpha=0.5,linewidth=2) +
+    scale_colour_manual("", 
+                        breaks = c("Equal number of cases and controls", "Control case ratio 3:1","One million controls", "Control case ratio 10:1"),
+                        values = c("#3C5488FF", "#00A087FF", "#F39B7FFF","#E64B35FF")) + ylim(ylim) +
+    labs(x = "Number of cases in the GWAS for training PRS",
+         y = "AUC",
+         linetype = "",
+         title = title)+
+    theme_Publication()+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+    scale_x_continuous(breaks=seq(5000,max(data$n),20000)) + theme(legend.position = "top")
+  
+  scatplot
+  
+  ggsave(filename=paste0("../result/",prefix,".png"),
+         plot=scatplot, device="png",
+         width=16, height=8, units="in", dpi=300)
+}
+threeplot1(data=projCT,title="CT",prefix="CT_3curve2")
 
 equal2=data.frame(n=projct$n,ct=projct$equal,ct_low=projct$equal_low,ct_high=projct$equal_high,
                   ldpred=projld$equal,ldpred_low=projld$equal_low,ldpred_high=projld$equal_high)

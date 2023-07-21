@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 .libPaths(c("/data/wangx53",.libPaths()))
 library(data.table)
-plink="/usr/local/apps/plink/1.9/plink"
+plink="/usr/local/apps/plink/1.9.0-beta4.4/plink"
 plink2="/usr/local/apps/plink/2.3-alpha/plink2"
 #work on 610K individual data
 #tmp=fread("../result/imputation/chr22.traw",nrows=10000)
@@ -152,16 +152,16 @@ options(default.nproc.blas = NULL)
 formsumstats=function(sumstatfile="../result/metano610_sumstat.txt",
                       prefix_tun="../result/six10k_train",outprefix="six10k")
 {
-  sumdat=as.data.frame(fread(sumstatfile)) #11439205
-  dat=data.frame(snp=sumdat$MarkerName,chr=sumdat$CHR,pos=sumdat$BP)
-  dat=findrsid(dat)
-  idx=which(!grepl("^rs",sumdat$rsid))
-  sumdat$rsid[idx]=NA
-  table(sumdat$rsid==dat$rsid,useNA="ifany")
-  table(is.na(sumdat$rsid),is.na(dat$rsid))
-  sumdat$rsid=dat$rsid
-  idx=which(is.na(sumdat$rsid))
-  sumdat$rsid[idx]=paste0(sumdat$CHR[idx],sumdat$BP[idx])
+  sumdat=as.data.frame(fread(sumstatfile)) #7805414
+  # dat=data.frame(snp=sumdat$MarkerName,chr=sumdat$CHR,pos=sumdat$BP)
+  # dat=findrsid(dat)
+  # idx=which(!grepl("^rs",sumdat$rsid))
+  # sumdat$rsid[idx]=NA
+  # table(sumdat$rsid==dat$rsid,useNA="ifany")
+  # table(is.na(sumdat$rsid),is.na(dat$rsid))
+  # sumdat$rsid=dat$rsid
+  #idx=which(is.na(sumdat$rsid))
+  #sumdat$rsid[idx]=paste0(sumdat$CHR[idx],sumdat$BP[idx])
   #sumdat=sumdat[!is.na(sumdat$rsid),]
   idx=which(colnames(sumdat) %in% c("chromosome","CHR"))
   if (length(idx)>0) colnames(sumdat)[idx]="chr"
@@ -174,7 +174,7 @@ formsumstats=function(sumstatfile="../result/metano610_sumstat.txt",
   idx=which(colnames(sumdat) %in% c("alleleA","Reference.allele","Allele2"))
   if (length(idx)>0) colnames(sumdat)[idx]="a0"
   
-  sumdat$n_eff=4*sumdat$neff
+  sumdat$n_eff=4*sumdat$neff #For LDpred2
   
   idx=which(colnames(sumdat) %in% c("frequentist_add_beta_1","Effect"))
   if (length(idx)>0) colnames(sumdat)[idx]="beta"
@@ -207,9 +207,9 @@ formsumstats=function(sumstatfile="../result/metano610_sumstat.txt",
   # table(sumstats1$beta==info_snp$beta)
   # table(sumstats1$a0==info_snp$a0)
   # all(sumstats1$beta_se==info_snp$beta_se)
-  # 11,439,205 variants to be matched.
-  # 1,007,146 ambiguous SNPs have been removed.
-  # 5,692,816 variants have been matched; 0 were flipped and 2,574,539 were reversed.
+  #7,805,414 variants to be matched.
+  # 1,004,547 ambiguous SNPs have been removed.
+  # 5,678,649 variants have been matched; 0 were flipped and 2,568,246 were reversed.
   sumstats=data.frame(chr=info_snp$chr,pos=info_snp$pos,rsid=info_snp$rsid,a0=info_snp$a0,a1=info_snp$a1,n_eff=info_snp$n_eff,beta_se=info_snp$beta_se,p=info_snp$p,beta=info_snp$beta)
   fwrite(sumstats,file=paste0("../result/",outprefix,"_sumstats.txt"),row.names = F,sep="\t",quote=F)
   #return(sumstats)
@@ -375,7 +375,7 @@ run_ldpred2=function(tmpdir=1,sumstatfile="../result/six10k_sumstats.txt",prefix
   #3. Load and transform the summary statistic file
   #Load summary statistic file
   # Read in the summary statistic file
-  sumdat=as.data.frame(fread(sumstatfile)) #5692816
+  sumdat=as.data.frame(fread(sumstatfile)) #5678649
   print("sumdat dim:")
   print(dim(sumdat))
   # LDpred 2 require the header to follow the exact naming. a1 :effect allelle
@@ -384,7 +384,7 @@ run_ldpred2=function(tmpdir=1,sumstatfile="../result/six10k_sumstats.txt",prefix
   sumstats <- bigreadr::fread2(paste0(sumstatfile,".ldpred")) 
   
   # Filter out hapmap SNPs
-  sumstats <- sumstats[sumstats$rsid%in% info$rsid,] #997935
+  sumstats <- sumstats[sumstats$rsid%in% info$rsid,] #997853
   print("sumstat in HM3:")
   print(nrow(sumstats))
   #3. Calculate the LD matrix

@@ -144,78 +144,6 @@ get_aucs=function(allprs)
   return(list(auc=auc,auc_val=auc_val,aucadj=aucadj))
 }
 
-
-#CT
-#p-value cutoffs (consistent with ../result/range_list)
-pthres <- c(5E-08,5E-07,5E-06,5E-05,5E-05,5E-03,5E-02,5E-01,1) 
-CT_prs=function(prsprefix_tun="../result/six10k_tun.p_value_",prsprefix_val="../result/six10k_val.p_value_")
-{
-  #find the optimal cutoff
-  auc_tun=rep(0,length(pthres))
-  for (i in 1:length(pthres))
-  {
-    prs=read.table(paste0(prsprefix_tun,i,".sscore"))
-    colnames(prs)[2]="ID"
-    colnames(prs)[6]="prs"
-    pheno.prs=merge(phenotype,prs,by="ID")
-    
-    model1 <- glm(y~prs, data=pheno.prs,family = "binomial")
-    predicted1 <- predict(model1,pheno.prs, type="response")
-    auc_tun[i]=as.numeric(pROC::auc(pheno.prs$y,predicted1,quiet=T))
-   
-  }
-  idx_optimal=which.max(auc_tun)
-  clumpedsnp=fread("../result/six10k.clumped")
-  sum(clumpedsnp$P<=pthres[idx_optimal]) #20 snps (P<5e-7) used
-  prs_tun=read.table(paste0(prsprefix_tun,idx_optimal,".sscore"))
-  colnames(prs_tun)[2]="ID"
-  colnames(prs_tun)[6]="prs"
-  prs_tun=prs_tun[,c(2,6)]
-  
-  prs=read.table(paste0(prsprefix_val,idx_optimal,".sscore"))
-  colnames(prs)[2]="ID"
-  colnames(prs)[6]="prs"
-  prs_val=prs[,c(2,6)]
-  allprs=rbind(prs_tun,prs_val)
-  
-  aucs=get_aucs(allprs=allprs)
-  
-  return(list(aucs=aucs,idx_optimal=idx_optimal,allprs=allprs))
-}
-CTres=CT_prs()
-
-
-CT_5e8prs=function(prsprefix_tun="../result/six10k_tun.p_value_",prsprefix_val="../result/six10k_val.p_value_")
-{
-  
-  idx_optimal=1 #5e-8
-  clumpedsnp=fread("../result/six10k.clumped")
-  sum(clumpedsnp$P<=pthres[1]) #14 snps (P<5e-8) used
-  prs_tun=read.table(paste0(prsprefix_tun,idx_optimal,".sscore"))
-  colnames(prs_tun)[2]="ID"
-  colnames(prs_tun)[6]="prs"
-  prs_tun=prs_tun[,c(2,6)]
-  
-  prs=read.table(paste0(prsprefix_val,idx_optimal,".sscore"))
-  colnames(prs)[2]="ID"
-  colnames(prs)[6]="prs"
-  prs_val=prs[,c(2,6)]
-  allprs=rbind(prs_tun,prs_val)
-  
-  aucs=get_aucs(allprs=allprs)
-  
-  return(list(aucs=aucs,idx_optimal=idx_optimal,allprs=allprs))
-}
-CT5e8res=CT_5e8prs()
-# [1] "auc:"
-# tun       val
-# 1 0.5641449 0.5909213
-# auc_low  auc_high
-# 1 0.5738633 0.6071924
-# auc   auc_low  auc_high
-# 1 0.5928356 0.5755053 0.6091415
-CT5e8res_OR=prs_or_quantiles(allprs=CT5e8res$allprs,main="CT(5e-8)",ytext = 0.27)
-
 prs_or_quantiles=function(allprs=CTprs$allprs,main="",ytext=0.25)
 {
   phenotype2=phenotype[match(famtest$V2,phenotype$ID),]
@@ -286,7 +214,7 @@ prs_or_quantiles=function(allprs=CTprs$allprs,main="",ytext=0.25)
        xpd =T,
        ## Rotate the labels by 35 degrees.
        srt = 35,
-
+       
        ## Adjust the labels to almost 100% right-justified.
        adj = 1,
        ## Increase label size.
@@ -294,18 +222,104 @@ prs_or_quantiles=function(allprs=CTprs$allprs,main="",ytext=0.25)
   return(OR)
 }
 
-
+#CT
+#p-value cutoffs (consistent with ../result/range_list)
+pthres <- c(5E-08,5E-07,5E-06,5E-05,5E-05,5E-03,5E-02,5E-01,1) 
+CT_prs=function(prsprefix_tun="../result/six10k_tun.p_value_",prsprefix_val="../result/six10k_val.p_value_")
+{
+  #find the optimal cutoff
+  auc_tun=rep(0,length(pthres))
+  for (i in 1:length(pthres))
+  {
+    prs=read.table(paste0(prsprefix_tun,i,".sscore"))
+    colnames(prs)[2]="ID"
+    colnames(prs)[6]="prs"
+    pheno.prs=merge(phenotype,prs,by="ID")
+    
+    model1 <- glm(y~prs, data=pheno.prs,family = "binomial")
+    predicted1 <- predict(model1,pheno.prs, type="response")
+    auc_tun[i]=as.numeric(pROC::auc(pheno.prs$y,predicted1,quiet=T))
+   
+  }
+  idx_optimal=which.max(auc_tun)
+  clumpedsnp=fread("../result/six10k.clumped")
+  sum(clumpedsnp$P<=pthres[idx_optimal]) #20 snps (P<5e-7) used
+  CTselsnps=clumpedsnp$SNP[which(clumpedsnp$P<=pthres[idx_optimal])]
+  write.table(CTselsnps,file="../result/CTselsnps.txt",row.names = F,col.names = F,quote=F)
+  prs_tun=read.table(paste0(prsprefix_tun,idx_optimal,".sscore"))
+  colnames(prs_tun)[2]="ID"
+  colnames(prs_tun)[6]="prs"
+  prs_tun=prs_tun[,c(2,6)]
+  
+  prs=read.table(paste0(prsprefix_val,idx_optimal,".sscore"))
+  colnames(prs)[2]="ID"
+  colnames(prs)[6]="prs"
+  prs_val=prs[,c(2,6)]
+  allprs=rbind(prs_tun,prs_val)
+  
+  aucs=get_aucs(allprs=allprs)
+  
+  return(list(aucs=aucs,idx_optimal=idx_optimal,allprs=allprs))
+}
+CTres=CT_prs()
+# $auc
+# tun       val
+# 1 0.5831845 0.5991669
+# 
+# $auc_val
+# auc_low  auc_high
+# 1 0.5778936 0.6197845
+# 
+# $aucadj
+# auc   auc_low  auc_high
+# 1 0.6007601 0.5795602 0.6225562
 png("../result/CT_prsquantiles.png",pointsize = 8,res=300,width=960,height=960)
 CTres_OR=prs_or_quantiles(allprs=CTres$allprs,main="CT",ytext = 0.12)
 dev.off()
 # or   or_low  or_high
-# 1 1.40138 1.317046 1.492062
+# 1  1.451246 1.340657 1.572681
+
+CT_5e8prs=function(prsprefix_tun="../result/six10k_tun.p_value_",prsprefix_val="../result/six10k_val.p_value_")
+{
+  
+  idx_optimal=1 #5e-8
+  clumpedsnp=fread("../result/six10k.clumped")
+  sum(clumpedsnp$P<=pthres[1]) #14 snps (P<5e-8) used
+  prs_tun=read.table(paste0(prsprefix_tun,idx_optimal,".sscore"))
+  colnames(prs_tun)[2]="ID"
+  colnames(prs_tun)[6]="prs"
+  prs_tun=prs_tun[,c(2,6)]
+  
+  prs=read.table(paste0(prsprefix_val,idx_optimal,".sscore"))
+  colnames(prs)[2]="ID"
+  colnames(prs)[6]="prs"
+  prs_val=prs[,c(2,6)]
+  allprs=rbind(prs_tun,prs_val)
+  
+  aucs=get_aucs(allprs=allprs)
+  
+  return(list(aucs=aucs,idx_optimal=idx_optimal,allprs=allprs))
+}
+CT5e8res=CT_5e8prs()
+# $auc
+# tun       val
+# 1 0.5804069 0.5871434
+# 
+# $auc_val
+# auc_low  auc_high
+# 1 0.5649726 0.6082735
+# 
+# $aucadj
+# auc   auc_low  auc_high
+# 1 0.5882159 0.5669109 0.6096396
+
+CT5e8res_OR=prs_or_quantiles(allprs=CT5e8res$allprs,main="CT(5e-8)",ytext = 0.27)
 
 #LDpred2----------------------------
 LDpred_prs=function(LDpredrda="../result/LDpred_six10k_pred.RData")
 {
   load(LDpredrda)
-  dim(df_beta)# 997935 snps
+  dim(df_beta)# 997835 snps
   auc_tun=rep(0,ncol(pred_grid))
   phenotype1=phenotype[match(famtrain$V2,phenotype$ID),]
   for (i in 1:ncol(pred_grid))
@@ -328,19 +342,22 @@ LDpred_prs=function(LDpredrda="../result/LDpred_six10k_pred.RData")
 }
 
 LDpredres=LDpred_prs()
-# [1] "auc:"
+# $auc
 # tun       val
-# 1 0.5741286 0.5926333
-# auc_low  auc_high
-# 1 0.5750669 0.6089438
+# 1 0.5964123 0.6006132
+# 
+# $auc_val
+# auc_low auc_high
+# 1 0.5796134 0.621945
+# 
+# $aucadj
 # auc   auc_low  auc_high
-# 1 0.592982 0.5756282 0.6097404
+# 1 0.6018158 0.5797877 0.6229344
 
 #write.table(LDpredres$allprs,file="../result/LDpred_prs.csv",sep=",",quote=F,row.names = F)
 png("../result/LDpred_prsquantiles.png",pointsize = 8,res=300,width=960,height=960)
 LDpredres_OR=prs_or_quantiles(allprs=LDpredres$allprs,main="LDpred2",ytext=0.22)
 dev.off()
-
 
 #Lassosum2
 Lassosum_prs=function(Lassosumrda="../result/Lassosum2_six10k_pred.RData")
@@ -369,13 +386,17 @@ Lassosum_prs=function(Lassosumrda="../result/Lassosum2_six10k_pred.RData")
 }
 
 Lassosumres=Lassosum_prs()
-# [1] "auc:"
-# tun       val
-# 1 0.5694885 0.5913288
+# $auc
+# tun      val
+# 1 0.5956919 0.596923
+# 
+# $auc_val
 # auc_low  auc_high
-# 1 0.5741787 0.6083676
+# 1 0.5759035 0.6180192
+# 
+# $aucadj
 # auc   auc_low  auc_high
-# 1 0.5915495 0.5739571 0.6082956
+# 1 0.598126 0.5773293 0.6195446
 
 #write.table(Lassosumres$allprs,file="../result/Lassosum_prs.csv",sep=",",quote=F,row.names = F)
 png("../result/Lassosum_prsquantiles.png",pointsize = 8,res=300,width=960,height=960)
@@ -390,7 +411,7 @@ plink2="/usr/local/apps/plink/2.3-alpha/plink2"
 
 get_prscs=function(prefix="../result/prscs/six10k_pst_eff_a1_b0.5_",bimprefix="../result/six10k_train",outprefix="../result/six10k_train_prscs")
 {
-  if (!file.exists(paste0(outprefix,"PRS.sscore")))
+  #if (!file.exists(paste0(outprefix,"PRS.sscore")))
   {
     #read posterior SNP effect size
     betadat=NULL
@@ -448,7 +469,7 @@ PRSCS_prs=function(PRS_tun=PRScs_tun,PRS_val=PRScs_val)
     auc_tun$EUR[i]=as.numeric(pROC::auc(pheno.prs$y,predicted1,quiet=T))
   }
   allbeta=as.data.frame(fread("../result/prscs/six10k_pst_eff_a1_b0.5_.prs_coeff"))
-  dim(allbeta) #1054023
+  dim(allbeta) #1053930
   idx_optimal=which.max(auc_tun$EUR)
   allprs=data.frame(ID=c(PRS_tun$sample,PRS_val$sample),prs=c(PRS_tun[,idx_optimal+1],
                PRS_val[,idx_optimal+1]))
@@ -456,13 +477,17 @@ PRSCS_prs=function(PRS_tun=PRScs_tun,PRS_val=PRScs_val)
   return(list(aucs=aucs,allprs=allprs))
 }
 PRScsres=PRSCS_prs()
-# [1] "auc:"
+# $auc
 # tun       val
-# 1 0.5583361 0.5827689
+# 1 0.5809478 0.5981579
+# 
+# $auc_val
 # auc_low  auc_high
-# 1 0.5663949 0.6000751
+# 1 0.5768777 0.6186473
+# 
+# $aucadj
 # auc   auc_low  auc_high
-# 1 0.5813707 0.5646171 0.5985561
+# 1 0.5998702 0.5789898 0.6212744
 png("../result/PRScs_prsquantiles.png",pointsize = 8,res=300,width=960,height=960)
 PRScs_OR=prs_or_quantiles(allprs=PRScsres$allprs,main="PRS-CS",ytext=0.22)
 dev.off()
@@ -591,6 +616,157 @@ smokingmodel=function(allprs=CTres$allprs)
 }
 Smokingres=smokingmodel()
 
+phenotype=read.csv("../data/PHENOTYPE_BLADDERGWAS_02102022_SK.csv")
+phenotype$y=0
+phenotype$y[which(phenotype$casecontrol=="CASE")]=1
+idx=which(phenotype=="MISSING",arr.ind=T)
+phenotype[idx]=NA
+phenotype$cig_cat=factor(phenotype$cig_cat,levels=c("NEVER","FORMER","OCCASIONAL","CURRENT"))
+methypheno=read_excel("../data/DNAmAge and Bladder Cancer.xlsx",sheet=4)
+methypheno$Methylation=as.numeric(methypheno$`Methylation PC1`)
+methypheno$cg05575921=as.numeric(methypheno$cg05575921)
+methypheno$cg03636183=as.numeric(methypheno$cg03636183)
+methypheno$cig_stat=factor(methypheno$cig_stat,levels = c("Never Smoked Cigarettes","Former Cigarette Smoker","Current Cigarette Smoker"))
+table(is.na(methypheno$Methylation))
+# FALSE  TRUE 
+# 1598    40 
+idx=which(!is.na(methypheno$Methylation))
+table(methypheno$Study[idx],methypheno$CaseStatus[idx])
+fm=glm(CaseStatus~cig_stat,data=methypheno,family = binomial)
+coeff1 =coef(fm)
+exp(coeff1)
+idx=methypheno$Study=="ATBC"
+table(methypheno$cig_stat[idx],useNA = "ifany")
+table(methypheno$cig_stat[!idx],useNA = "ifany")
+fm=glm(CaseStatus~cig_stat,data=methypheno[methypheno$Study=="PLCO",],family = binomial)
+coeff1 =coef(fm)
+exp(coeff1)
+fm=glm(CaseStatus~cig_stat,data=methypheno,family = binomial)
+coeff1 =coef(fm)
+exp(coeff1)
+fm=glm("CaseStatus~Study",data=methypheno,family = binomial)
+fm=glm("CaseStatus~Methylation",data=methypheno,family = binomial)
+predicted1 <- predict(fm,methypheno, type="response")
+auc1=as.numeric(pROC::auc(methypheno$CaseStatus,predicted1,quiet=T))
+fm=glm("CaseStatus~cg05575921",data=methypheno,family = binomial)
+predicted2 <- predict(fm,methypheno, type="response")
+auc2=as.numeric(pROC::auc(methypheno$CaseStatus,predicted2,quiet=T))
+fm=glm("CaseStatus~cg03636183",data=methypheno,family = binomial)
+predicted3 <- predict(fm,methypheno, type="response")
+auc3=as.numeric(pROC::auc(methypheno$CaseStatus,predicted3,quiet=T))
+
+
+fm=glm("CaseStatus~Methylation+Study",data=methypheno,family = binomial)
+fm=glm("CaseStatus~cg05575921+Study+Age",data=methypheno,family = binomial)
+fm=glm("CaseStatus~cg03636183+Study",data=methypheno,family = binomial)
+cor(methypheno$cg05575921,methypheno$cg03636183,use="complete") #0.795
+fm=glm("CaseStatus~cg05575921+cg03636183+Study+Age",data=methypheno,family = binomial)
+# Estimate Std. Error z value Pr(>|z|)    
+# (Intercept)   1.9096     0.3196   5.975  2.3e-09 ***
+# cg05575921   -0.3835     0.5467  -0.701  0.48304    
+# cg03636183   -2.9977     0.8932  -3.356  0.00079 ***
+#Generate PRS for ATBC/PLCO samples
+plink="/usr/local/apps/plink/1.9.0-beta4.4/plink"
+plink2="/usr/local/apps/plink/2.3-alpha/plink2"
+sumstatfile="../result/six10k_sumstats.txt"
+CTselsnps=read.table("../result/CTselsnps.txt")$V1
+sumdat=as.data.frame(fread(sumstatfile))
+idx=match(CTselsnps,sumdat$rsid)
+tmp=data.frame(snp=CTselsnps,effect=sumdat$a1[idx],beta=sumdat$beta[idx])
+write.table(tmp,file="../result/CT.score",row.names = F,col.names = T,sep="\t",quote=F)
+#compute PRS
+cmd=paste0(plink2," --pfile ../result/imputation/merged_rsid  --score ../result/CT.score header cols=+scoresums --out ../result/CT_six10k")
+system(cmd)
+CTprs=as.data.frame(fread("../result/CT_six10k.sscore"))
+table(CTprs$`#IID` %in% phenotype$study_pid)
+idx=match(CTprs$`#IID`,phenotype$study_pid)
+table(phenotype$study[idx])
+mypheno=phenotype[phenotype$study %in% c("ATBC","PLCO"),]
+mypheno=mypheno[mypheno$study_pid %in% CTprs$`#IID`,]
+smoking_methylation_model=function(allprs=CTres$allprs)
+{
+  auc=data.frame(smoking=NA,smoking_low=NA,smoking_high=NA,prs=NA,prs_low=NA,prs_high=NA,
+                 smokingprs=NA,smokingprs_low=NA,smokingprs_high=NA)
+  
+  OR1=data.frame(FORMER=NA,FORMER_low=NA,FORMER_high=NA,
+                 OCCASIONAL=NA,OCCASIONAL_low=NA,OCCASIONAL_high=NA,
+                 CURRENT=NA,CURRENT_low=NA,CURRENT_high=NA)
+  OR2=data.frame(prs=NA,prs_low=NA,prs_high=NA)
+  OR3=data.frame(prs=NA,prs_low=NA,prs_high=NA,
+                 FORMER=NA,FORMER_low=NA,FORMER_high=NA,
+                 OCCASIONAL=NA,OCCASIONAL_low=NA,OCCASIONAL_high=NA,
+                 CURRENT=NA,CURRENT_low=NA,CURRENT_high=NA)
+  pheno.prs=merge(phenotype,allprs,by="ID")
+  pheno.prs=pheno.prs[pheno.prs$ID %in% famtest$V2,]
+  pheno.prs=myscale(pheno.prs)
+  
+  model1 <- glm(y~cig_cat, data=pheno.prs[pheno.prs$ID %in% famtest$V2,],family = "binomial")
+  coeff1 =coef(model1)
+  OR1$FORMER=exp(coeff1)[2]
+  OR1$OCCASIONAL=exp(coeff1)[3]
+  OR1$CURRENT=exp(coeff1)[4]
+  tmp1=confint(model1)
+  OR1$FORMER_low=exp(tmp1[2,1])
+  OR1$FORMER_high=exp(tmp1[2,2])
+  OR1$OCCASIONAL_low=exp(tmp1[3,1])
+  OR1$OCCASIONAL_high=exp(tmp1[3,2])
+  OR1$CURRENT_low=exp(tmp1[4,1])
+  OR1$CURRENT_high=exp(tmp1[4,2])
+  predicted1 <- predict(model1,pheno.prs[pheno.prs$ID %in% famtest$V2,], type="response")
+  auc$smoking=as.numeric(pROC::auc(pheno.prs$y[pheno.prs$ID %in% famtest$V2],predicted1,quiet=T))
+  boot_auc = boot(data =pheno.prs[pheno.prs$ID %in% famtest$V2,], statistic = AUCSmokingBoot, R = 10000)
+  tmp=boot.ci(boot_auc,type="bca")
+  auc$smoking_low=tmp$bca[4]
+  auc$smoking_high=tmp$bca[5]
+  
+  model1 <- glm(y~prs, data=pheno.prs[pheno.prs$ID %in% famtest$V2,],family = "binomial")
+  coeff1 =coef(model1)
+  OR2$prs=exp(coeff1)[2]
+  tmp1=confint(model1)
+  OR2$prs_low=exp(tmp1[2,1])
+  OR2$prs_high=exp(tmp1[2,2])
+  predicted1 <- predict(model1,pheno.prs[pheno.prs$ID %in% famtest$V2,], type="response")
+  auc$prs=as.numeric(pROC::auc(pheno.prs$y[pheno.prs$ID %in% famtest$V2],predicted1,quiet=T))
+  boot_auc = boot(data =pheno.prs[pheno.prs$ID %in% famtest$V2,], statistic = AUCBoot, R = 10000)
+  tmp=boot.ci(boot_auc,type="bca")
+  auc$prs_low=tmp$bca[4]
+  auc$prs_high=tmp$bca[5]
+  
+  model1 <- glm(y~prs+cig_cat, data=pheno.prs[pheno.prs$ID %in% famtest$V2,],family = "binomial")
+  coeff1 =coef(model1)
+  OR3$prs=exp(coeff1)[2]
+  OR3$FORMER=exp(coeff1)[3]
+  OR3$OCCASIONAL=exp(coeff1)[4]
+  OR3$CURRENT=exp(coeff1)[5]
+  tmp1=confint(model1)
+  OR3$prs_low=exp(tmp1[2,1])
+  OR3$prs_high=exp(tmp1[2,2])
+  OR3$FORMER_low=exp(tmp1[3,1])
+  OR3$FORMER_high=exp(tmp1[3,2])
+  OR3$OCCASIONAL_low=exp(tmp1[4,1])
+  OR3$OCCASIONAL_high=exp(tmp1[4,2])
+  OR3$CURRENT_low=exp(tmp1[5,1])
+  OR3$CURRENT_high=exp(tmp1[5,2])
+  predicted1 <- predict(model1,pheno.prs[pheno.prs$ID %in% famtest$V2,], type="response")
+  auc$smokingprs=as.numeric(pROC::auc(pheno.prs$y[pheno.prs$ID %in% famtest$V2],predicted1,quiet=T))
+  boot_auc = boot(data =pheno.prs[pheno.prs$ID %in% famtest$V2,], statistic = AUCSmokingPrsBoot, R = 10000)
+  tmp=boot.ci(boot_auc,type="bca")
+  auc$smokingprs_low=tmp$bca[4]
+  auc$smokingprs_high=tmp$bca[5]
+  
+  # tmp=c(paste0("EV",1:10),"Age_cat","gender","prs","Age_cat")
+  # idx=complete.cases(pheno.prs[,tmp])
+  # table(idx)
+  # tmp=paste0("y~",paste(c(paste0("EV",1:10),"Age_cat","gender","prs","Age_cat"),collapse="+"))
+  # model1 <- glm(as.formula(tmp), data=pheno.prs[pheno.prs$ID %in% famtest$V2,],family = "binomial")
+  # predicted1 <- predict(model1,pheno.prs[pheno.prs$ID %in% famtest$V2,], type="response")
+  # auc$all=as.numeric(pROC::auc(pheno.prs$y[pheno.prs$ID %in% famtest$V2],predicted1,quiet=T))
+  # 
+  #model1 <- glm(y~prs+Age_cat+gender+EV1+EV2+EV3+EV4+EV5+EV6+EV7+EV8+EV9+EV10, data=pheno.prs,family = "binomial")
+  
+  return(list(auc,OR1,OR2,OR3))
+  
+}
 save(CTres,CT5e8res,LDpredres,Lassosumres,GWAS24res,file="../result/PRS_res.RData")
 
 save(CTres,CT5e8res,LDpredres,Lassosumres,PRScsres,GWAS24res,Smokingres,file="../result/PRS_res.RData")

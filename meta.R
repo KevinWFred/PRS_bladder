@@ -288,6 +288,49 @@ dat$rsid[which(dat$rsid %in% meta$rsid)]=NA
 idx=match(dat$snp,meta$MarkerName)
 meta$rsid[idx]=dat$rsid
 fwrite(meta,file="../result/metano610_sumstat.txt",sep="\t",quote=F,row.names = F)
+#check a hit on chr14
+meta=as.data.frame(fread("../result/metano610_sumstat.txt"))
+sum(meta$neff<max(meta$neff)*0.6)/nrow(meta) #0.34
+table(meta$HetDf)/nrow(meta)
+# 0          1          2          3          4          5          6 
+# 0.15257459 0.15227859 0.01280797 0.01023008 0.01030692 0.01230077 0.01720828 
+# 7          8 
+# 0.08882453 0.54346827 
+#only include variants in at least 3 platforms
+idx=which(meta$HetDf>2)
+meta=meta[idx,]
+fwrite(meta,file="../result/metano610_sumstat.txt",sep="\t",quote=F,row.names = F)
+
+idx=which(meta$CHR==14 & meta$`P-value`<5e-8)
+
+# MarkerName Allele1 Allele2  Freq1 FreqSE MinFreq MaxFreq   Effect StdErr
+# 6463194 14:42680562       A       G 0.0146      0  0.0146  0.0146 -11.2646 1.7166
+# P-value Direction HetISq HetChiSq HetDf HetPVal     neff CHR       BP
+# 6463194 5.303e-11 ?????-???      0        0     0       1 78.67508  14 42680562
+# rsid  N
+# 6463194 rs111302566 78
+check_gwas=function(snp="14:42680562",gwasfile="../result/six10kGWAS.txt")
+{
+  gwasdat=as.data.frame(fread(gwasfile))
+  idx=which(gwasdat$SNP==snp)
+  if(length(idx)>0) print(gwasdat[idx,])
+}
+check_gwas(gwasfile="/data/BB_Bioinformatics/ProjectData/Bladder/Summaries/summary/Overall/2.5M/out.plink.rsq03.01.txt")
+check_gwas(gwasfile="/data/BB_Bioinformatics/ProjectData/Bladder/Summaries/summary/Overall/660W/out.plink.rsq03.01.txt")
+check_gwas(gwasfile="/data/BB_Bioinformatics/ProjectData/Bladder/Summaries/summary/Overall/CNIO/Overall_a_ordered_matched.plink.rsq03.maf01.txt")
+check_gwas(gwasfile="/data/BB_Bioinformatics/ProjectData/Bladder/Summaries/summary/Overall/OmniX_1/out.plink.rsq03.01.txt")
+# CHR       BP         SNP A1 A2     SE           OR          L95
+# 6144490  14 42680562 14:42680562  A  G 1.7166 1.281877e-05 4.432482e-07
+# U95           P     INFO     Rsq GENOTYPED  ALL_EAF CASES_EAF
+# 6144490 0.0003707198 5.30282e-11 0.168473 0.44441   Imputed 0.014609     1e-05
+# CONTROLS_EAF ALL_Num CASES_Num CONTROLS_Num          ID
+# 6144490     0.026916     317       145          172 rs111302566
+check_gwas(gwasfile="/data/BB_Bioinformatics/ProjectData/Bladder/Summaries/summary/Overall/OmniX_2/out.plink.rsq03.01.txt")
+
+check_gwas(gwasfile="/data/BB_Bioinformatics/ProjectData/Bladder/Summaries/summary/Overall/Oncoarray/out.plink.rsq03.01.txt")
+check_gwas(gwasfile="/data/BB_Bioinformatics/ProjectData/Bladder/Summaries/summary/Overall/Oncoarray/out.plink.rsq03.01.txt")
+check_gwas(gwasfile="/data/BB_Bioinformatics/ProjectData/Bladder/Summaries/summary/Overall/deCODE/DECODE.Bladder_Cancer_05052017.180516.matched.plink.rsq03.maf01.txt")
+
 #24 GWAS snps
 library(readxl)
 gwasdat1=read_excel("../data/Supplemental Tables_R1_clean.xlsx",sheet=15,skip=3)
@@ -301,7 +344,7 @@ gwasdat1=gwasdat1[idx,]
 gwasdat2$SNP=gwasdat1$SNP
 gwasdat=gwasdat2
 table(gwasdat$SNP %in% meta$rsid) #T
-idx=match(gwasdat$SNP,meta$rsid)
+
 
 meta1 = meta %>% 
   mutate(CHR = as.integer(CHR),
@@ -312,9 +355,9 @@ meta1 = meta %>%
          N = as.integer(N)) %>% 
   mutate(P = ifelse(P==0,1E-300,P)) %>% 
   select(rsid,CHR,BP,FREQ_A1,P,N)
-meta1=meta1[!is.na(meta1$rsid),]
-meta1=meta1[meta1$FREQ_A1>0.01 & meta1$FREQ_A1<0.99,]
-sum(meta1$P<5e-8) #401
+#meta1=meta1[!is.na(meta1$rsid),]
+#meta1=meta1[meta1$FREQ_A1>0.01 & meta1$FREQ_A1<0.99,]
+sum(meta1$P<5e-8) #389
 png(filename = "../result/QQplot_metano610.png", width = 8, height = 8, units = "in",res=300)
 plotqq(data=meta1,optbreak=1,title="")
 dev.off()
