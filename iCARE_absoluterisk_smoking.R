@@ -51,7 +51,8 @@ myscale=function(pheno.prs)
 
 opt="M"
 load("../result/PRS_res.RData")
-flcca_prs=CTres$allprs
+#flcca_prs=CTres$allprs
+flcca_prs=GWAS24res$allprs
 pheno.prs.all=merge(phenotype,flcca_prs,by="ID")
 #only consider validation samples
 pheno.prs.all=pheno.prs.all[pheno.prs.all$ID %in% famtest$V2,]
@@ -214,10 +215,10 @@ ggplot(gelac_gwas_risk_sum, aes(x=cat10, y=mean_risk, fill=as.factor(smoking_gro
 
 if (opt == "M")
 {
-  ggsave("../result/M_cumrisk_smoking.pdf",width=10,height = 8)
+  ggsave("../result/M_cumrisk_smoking_gwas24.pdf",width=10,height = 8)
 }else
 {
-  ggsave("../result/F_cumrisk_smoking.pdf",width=10,height = 8)
+  ggsave("../result/F_cumrisk_smoking_gwas24.pdf",width=10,height = 8)
 }
 
 

@@ -24,9 +24,10 @@ opt=int(sys.argv[1])
 print(opt)
 prscrsdir="/data/BB_Bioinformatics/Kevin/tools/PRScs/"
 refdir="/data/BB_Bioinformatics/Kevin/tools/PRScsx/1kg/ldblk_1kg_eur"
+#n_gwas from ../result/six10k_sumstats.txt, max(n_eff)
 def run_prscs (ref_dir=refdir,bim_prefix="../result/six10k_train",
 sst_file="../result/six10k.sumdat.prscs",
-n_gwas="346970", OUTPUT_DIR="../result/prscs/six10k",
+n_gwas="26632", OUTPUT_DIR="../result/prscs/six10k",
 OUTPUT_FILE_PREFIX="six10k_train",
 PARAM_PHI="1e-6",PHI="1e-06",SEED="1000"):
     #run on each chrom
@@ -35,7 +36,7 @@ PARAM_PHI="1e-6",PHI="1e-06",SEED="1000"):
         print(file1out)
         #if (not os.path.exists(file1out)):
         cmd=[prscrsdir+"PRScs.py", "--ref_dir="+ref_dir, "--bim_prefix="+bim_prefix,"--chrom="+str(chr+1), "--sst_file="+sst_file, "--n_gwas="+n_gwas, "--out_dir="+OUTPUT_DIR, "--phi="+PARAM_PHI, "--seed="+SEED]
-       print(cmd)
+        print(cmd)
         subprocess.call(cmd,shell=False)
     print("done")
 
@@ -43,16 +44,16 @@ if (opt==1):
     run_prscs()
 
 if (opt==2):
-    run_prscs(OUTPUT_FILE_PREFIX="EASnever_train",PARAM_PHI="1e-4",PHI="1e-04")
+    run_prscs(PARAM_PHI="1e-4",PHI="1e-04")
 
 if (opt==3):
-    run_prscs(OUTPUT_FILE_PREFIX="EASnever_train",PARAM_PHI="1e-2",PHI="1e-02")
+    run_prscs(PARAM_PHI="1e-2",PHI="1e-02")
 
 if (opt==4):
-    run_prscs(OUTPUT_FILE_PREFIX="EASnever_train",PARAM_PHI="1",PHI="1e+00")
+    run_prscs(PARAM_PHI="1",PHI="1e+00")
 
 tmp=pd.DataFrame({'code':['/data/BB_Bioinformatics/Kevin/GWAS_Bladder/code/run_prscs.py']*4,
                   'opt':[1,2,3,4]})
 #tmp.to_csv("run_prscs.swarm",sep="\t",header=False,index=False)
 
-#swarm --sbatch '--export=MKL_NUM_THREADS=1,NUMEXPR_NUM_THREADS=1,OMP_NUM_THREADS=1' -f /data/BB_Bioinformatics/Kevin/GWAS_Bladder/code/run_prscs.swarm --module python/3.9 -g 64 --time=1-00:00:00 --gres=lscratch:64 
+#swarm --sbatch '--export=MKL_NUM_THREADS=1,NUMEXPR_NUM_THREADS=1,OMP_NUM_THREADS=1' -f /data/BB_Bioinformatics/Kevin/GWAS_Bladder/code/run_prscs.swarm --module python/3.9 -g 64 --time=0-15:00:00 --gres=lscratch:64 -p 2 

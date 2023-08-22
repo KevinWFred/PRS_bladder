@@ -44,7 +44,8 @@ myscale=function(pheno.prs)
 
 opt="M"
 load("../result/PRS_res.RData")
-flcca_prs=CTres$allprs
+#flcca_prs=CTres$allprs
+flcca_prs=GWAS24res$allprs
 pheno.prs.all=merge(phenotype,flcca_prs,by="ID")
 pheno.prs.all=pheno.prs.all[pheno.prs.all$casecontrol=="CONTROL",]
 #only work on validations
@@ -99,8 +100,8 @@ prs_sd[["type"]] <- "continuous"
 #define relative risk
 
 
-lc_model_log_hr_prs = log(c(1.45)) #CT
-
+#lc_model_log_hr_prs = log(c(1.45)) #CT
+lc_model_log_hr_prs = log(c(1.59)) #24GWAS
 
 lc_model_formula_prs = as.formula(diagnosis ~prs_sd)
 
@@ -193,10 +194,10 @@ final_dt_10year %>%
         axis.title=element_text(size=20))
 if (opt == "M")
 {
-  ggsave("../result/M_10yearrisk.pdf",width=8,height = 8)
+  ggsave("../result/M_10yearrisk_24gwas.pdf",width=8,height = 8)
 }else
 {
-  ggsave("../result/F_10yearrisk.pdf",width=8,height = 8)
+  ggsave("../result/F_10yearrisk_24gwas.pdf",width=8,height = 8)
 }
 
 
@@ -225,10 +226,10 @@ cumrisk %>%
         axis.title=element_text(size=20))
 if (opt == "M")
 {
-  ggsave("../result/M_cumrisk.pdf",width=8,height = 8)
+  ggsave("../result/M_cumrisk_24gwas.pdf",width=8,height = 8)
 }else
 {
-  ggsave("../result/F_cumrisk.pdf",width=8,height = 8)
+  ggsave("../result/F_cumrisk_24gwas.pdf",width=8,height = 8)
 }
 
 

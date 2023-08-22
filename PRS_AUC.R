@@ -502,6 +502,7 @@ gwas24=function()
   prs=read.table("../result/Bladder_gwas24.sscore")
   colnames(prs)[1]="ID"
   colnames(prs)[ncol(prs)]="prs"
+  prs$ID=changesampleid(id=prs$ID)
   pheno.prs=merge(phenotype,prs,by="ID")
   allprs=data.frame(ID=pheno.prs$ID,prs=pheno.prs$prs)
   aucs=get_aucs(allprs=allprs)
@@ -530,7 +531,7 @@ AUCSmokingPrsBoot = function(data,indices){
   return(c(auc))
 }
 
-smokingmodel=function(allprs=CTres$allprs)
+smokingmodel=function(allprs=GWAS24res$allprs)
 {
   auc=data.frame(smoking=NA,smoking_low=NA,smoking_high=NA,prs=NA,prs_low=NA,prs_high=NA,
                  smokingprs=NA,smokingprs_low=NA,smokingprs_high=NA)
@@ -543,11 +544,12 @@ smokingmodel=function(allprs=CTres$allprs)
                  FORMER=NA,FORMER_low=NA,FORMER_high=NA,
                  OCCASIONAL=NA,OCCASIONAL_low=NA,OCCASIONAL_high=NA,
                  CURRENT=NA,CURRENT_low=NA,CURRENT_high=NA)
-  pheno.prs=merge(phenotype,allprs,by="ID")
+  pheno.prs=merge(phenotype[!is.na(phenotype$cig_cat),],allprs,by="ID")
   pheno.prs=pheno.prs[pheno.prs$ID %in% famtest$V2,]
+  
   pheno.prs=myscale(pheno.prs)
   
-  model1 <- glm(y~cig_cat, data=pheno.prs[pheno.prs$ID %in% famtest$V2,],family = "binomial")
+  model1 <- glm(y~cig_cat, data=pheno.prs[pheno.prs$ID %in% famtest$V2 & !is.na(pheno.prs$cig_cat),],family = "binomial")
   coeff1 =coef(model1)
   OR1$FORMER=exp(coeff1)[2]
   OR1$OCCASIONAL=exp(coeff1)[3]
@@ -626,7 +628,15 @@ methypheno=read_excel("../data/DNAmAge and Bladder Cancer.xlsx",sheet=4)
 methypheno$Methylation=as.numeric(methypheno$`Methylation PC1`)
 methypheno$cg05575921=as.numeric(methypheno$cg05575921)
 methypheno$cg03636183=as.numeric(methypheno$cg03636183)
-methypheno$cig_stat=factor(methypheno$cig_stat,levels = c("Never Smoked Cigarettes","Former Cigarette Smoker","Current Cigarette Smoker"))
+methypheno$cig_stat=gsub("Current Cigarette Smoker","Current",methypheno$cig_stat)
+methypheno$cig_stat=gsub("Former Cigarette Smoker","Former",methypheno$cig_stat)
+methypheno$cig_stat=gsub("Never Smoked Cigarettes","Never",methypheno$cig_stat)
+methypheno$cig_stat=factor(methypheno$cig_stat,levels = c("Never","Former","Current"))
+methypheno$tobacco_duration=as.numeric(methypheno$`tobacco duration (yrs)`)
+methypheno$tobacco_cig_day=as.numeric(methypheno$`tobacco cig/day`)
+methypheno$tobacco_cig_day[which(methypheno$cig_stat=="Never")]=0
+methypheno$tobacco_duration[which(methypheno$cig_stat=="Never")]
+
 table(is.na(methypheno$Methylation))
 # FALSE  TRUE 
 # 1598    40 
@@ -635,15 +645,26 @@ table(methypheno$Study[idx],methypheno$CaseStatus[idx])
 fm=glm(CaseStatus~cig_stat,data=methypheno,family = binomial)
 coeff1 =coef(fm)
 exp(coeff1)
+fm=glm(CaseStatus~cig_stat,data=methypheno,family = binomial)
 idx=methypheno$Study=="ATBC"
 table(methypheno$cig_stat[idx],useNA = "ifany")
 table(methypheno$cig_stat[!idx],useNA = "ifany")
+table(methypheno$Study,methypheno$cig_stat)
+table(methypheno$Study,methypheno$CaseStatus,useNA="ifany")
+PLCOdat=methypheno[methypheno$Study=="PLCO",]
+table(PLCOdat$cig_stat,PLCOdat$CaseStatus)
 fm=glm(CaseStatus~cig_stat,data=methypheno[methypheno$Study=="PLCO",],family = binomial)
+predicted1 <- predict(fm,methypheno, type="response")
+auc1=as.numeric(pROC::auc(methypheno$CaseStatus,predicted1,quiet=T)) #0.524
+
 coeff1 =coef(fm)
 exp(coeff1)
-fm=glm(CaseStatus~cig_stat,data=methypheno,family = binomial)
+fm=glm(CaseStatus~cig_stat+Study,data=methypheno,family = binomial)
 coeff1 =coef(fm)
 exp(coeff1)
+tmp1=confint(fm)
+exp(tmp1)
+
 fm=glm("CaseStatus~Study",data=methypheno,family = binomial)
 fm=glm("CaseStatus~Methylation",data=methypheno,family = binomial)
 predicted1 <- predict(fm,methypheno, type="response")
@@ -655,10 +676,24 @@ fm=glm("CaseStatus~cg03636183",data=methypheno,family = binomial)
 predicted3 <- predict(fm,methypheno, type="response")
 auc3=as.numeric(pROC::auc(methypheno$CaseStatus,predicted3,quiet=T))
 
+fm=glm("CaseStatus~Methylation",data=PLCOdat,family = binomial)
+fm=glm("CaseStatus~cg05575921",data=PLCOdat,family = binomial)
+fm=glm("CaseStatus~cg03636183",data=PLCOdat,family = binomial)
+summary(fm)
+cor(methypheno$cg05575921,methypheno$cg03636183,use="complete") #0.795
+
+fm=glm(CaseStatus~cig_stat,data=methypheno,family = binomial)
+fm=glm(CaseStatus~tobacco_duration,data=methypheno,family = binomial)
+fm=glm(CaseStatus~tobacco_cig_day,data=methypheno,family = binomial)
+fm=glm(CaseStatus~tobacco_duration+tobacco_cig_day,data=methypheno,family = binomial)
+fm=glm(CaseStatus~cig_stat+tobacco_duration+tobacco_cig_day,data=methypheno,family = binomial)
+predicted1 <- predict(fm,methypheno, type="response")
+auc1=as.numeric(pROC::auc(methypheno$CaseStatus,predicted1,quiet=T))
 
 fm=glm("CaseStatus~Methylation+Study",data=methypheno,family = binomial)
 fm=glm("CaseStatus~cg05575921+Study+Age",data=methypheno,family = binomial)
 fm=glm("CaseStatus~cg03636183+Study",data=methypheno,family = binomial)
+
 cor(methypheno$cg05575921,methypheno$cg03636183,use="complete") #0.795
 fm=glm("CaseStatus~cg05575921+cg03636183+Study+Age",data=methypheno,family = binomial)
 # Estimate Std. Error z value Pr(>|z|)    
@@ -683,7 +718,11 @@ idx=match(CTprs$`#IID`,phenotype$study_pid)
 table(phenotype$study[idx])
 mypheno=phenotype[phenotype$study %in% c("ATBC","PLCO"),]
 mypheno=mypheno[mypheno$study_pid %in% CTprs$`#IID`,]
-smoking_methylation_model=function(allprs=CTres$allprs)
+write.csv(mypheno[,c("study_pid","study")],file="../result/PLCO_ATBC_PRSID.csv",row.names = F)
+write.csv(methypheno[,c("studyid","Study")],file="../result/PLCO_ATBC_methylationID.csv",row.names = F)
+
+sum(mypheno$study_pid %in% methypheno$studyid)
+smoking_methylation_model=function(allprs=GWAS24res$allprs)
 {
   auc=data.frame(smoking=NA,smoking_low=NA,smoking_high=NA,prs=NA,prs_low=NA,prs_high=NA,
                  smokingprs=NA,smokingprs_low=NA,smokingprs_high=NA)
@@ -743,10 +782,8 @@ smoking_methylation_model=function(allprs=CTres$allprs)
   OR3$prs_high=exp(tmp1[2,2])
   OR3$FORMER_low=exp(tmp1[3,1])
   OR3$FORMER_high=exp(tmp1[3,2])
-  OR3$OCCASIONAL_low=exp(tmp1[4,1])
-  OR3$OCCASIONAL_high=exp(tmp1[4,2])
-  OR3$CURRENT_low=exp(tmp1[5,1])
-  OR3$CURRENT_high=exp(tmp1[5,2])
+  OR3$CURRENT_low=exp(tmp1[4,1])
+  OR3$CURRENT_high=exp(tmp1[4,2])
   predicted1 <- predict(model1,pheno.prs[pheno.prs$ID %in% famtest$V2,], type="response")
   auc$smokingprs=as.numeric(pROC::auc(pheno.prs$y[pheno.prs$ID %in% famtest$V2],predicted1,quiet=T))
   boot_auc = boot(data =pheno.prs[pheno.prs$ID %in% famtest$V2,], statistic = AUCSmokingPrsBoot, R = 10000)
@@ -767,6 +804,6 @@ smoking_methylation_model=function(allprs=CTres$allprs)
   return(list(auc,OR1,OR2,OR3))
   
 }
-save(CTres,CT5e8res,LDpredres,Lassosumres,GWAS24res,file="../result/PRS_res.RData")
 
+Smokingres=smoking_methylation_model()
 save(CTres,CT5e8res,LDpredres,Lassosumres,PRScsres,GWAS24res,Smokingres,file="../result/PRS_res.RData")
