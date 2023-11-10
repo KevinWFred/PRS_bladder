@@ -35,6 +35,17 @@ for (i in 1:nrow(projres))
   projres$control10_high[i]=sigma2toauc(tmp$pheno.variance[3])
 }
 projct=projres
+#to fix the AUC off problem
+#ncase=13790,ncontrol=343502
+tmp=projection(est,v,n=13257,CI=TRUE)
+#sum of 24 variants is 0.1908
+offset=0.1908-tmp$pheno.variance[1]
+for (n in c(32000,50000,105000))
+{
+  neff=1/(0.1/n +1/n)
+  tmp=projection(est,v,n=neff,CI=TRUE)
+  print(round(tmp$pheno.variance[1]+offset,3))
+} #0.233 0.279 0.412
 
 par(mar=c(4.5,5,2,1))
 projres=data.frame(n=c(seq(5000,1000000,5000)),equal=NA,equal_low=NA,equal_high=NA,onem=NA,onem_low=NA,onem_high=NA,control10=NA,control10_low=NA,control10_high=NA,
@@ -84,6 +95,53 @@ for (i in 1:nrow(projres))
 }
 projCT=projres
 
+projres=data.frame(n=c(seq(5000,500000,5000)),equal=NA,equal_low=NA,equal_high=NA,onem=NA,onem_low=NA,onem_high=NA,control10=NA,control10_low=NA,control10_high=NA,
+                   control2=NA,control2_low=NA,control2_high=NA,control3=NA,control3_low=NA,control3_high=NA,control4=NA,control4_low=NA,control4_high=NA,
+                   control5=NA,control5_low=NA,control5_high=NA)
+sigma2toauc = function(x){ ifelse(x==0,0.50,pnorm(sqrt(0.5*x))) }
+for (i in 1:nrow(projres))
+{
+  tmp=projection(est,v,n=projres$n[i]/2,CI=TRUE)
+  projres$equal[i]=sigma2toauc(tmp$pheno.variance[1]+offset)
+  projres$equal_low[i]=sigma2toauc(tmp$pheno.variance[2]+offset)
+  projres$equal_high[i]=sigma2toauc(tmp$pheno.variance[3]+offset)
+  #tmp=polyriskpredict(N=projres$n[i]/2, Ps=c(est[2],1-est[2]), Sig2s=c(est[3],est[4]), M=nrow(sumdat), M1=nrow(sumdat)*est[1], type="GWAS",alp.GWAS=5e-8, k.fold=3:5)
+  # projres$equal[i]=tmp$AUC
+  neff=1/(1/1e6 +1/projres$n[i])
+  tmp=projection(est,v,n=neff,CI=TRUE)
+  projres$onem[i]=sigma2toauc(tmp$pheno.variance[1]+offset)
+  projres$onem_low[i]=sigma2toauc(tmp$pheno.variance[2]+offset)
+  projres$onem_high[i]=sigma2toauc(tmp$pheno.variance[3]+offset)
+  # tmp=polyriskpredict(N=neff, Ps=c(est[2],1-est[2]), Sig2s=c(est[3],est[4]), M=nrow(sumdat), M1=nrow(sumdat)*est[1], type="GWAS",alp.GWAS=5e-8, k.fold=3:5)
+  # projres$onem[i]=tmp$AUC
+  neff=1/(0.1/projres$n[i] +1/projres$n[i])
+  tmp=projection(est,v,n=neff,CI=TRUE)
+  projres$control10[i]=sigma2toauc(tmp$pheno.variance[1]+offset)
+  projres$control10_low[i]=sigma2toauc(tmp$pheno.variance[2]+offset)
+  projres$control10_high[i]=sigma2toauc(tmp$pheno.variance[3]+offset)
+  neff=1/(0.5/projres$n[i] +1/projres$n[i])
+  tmp=projection(est,v,n=neff,CI=TRUE)
+  projres$control2[i]=sigma2toauc(tmp$pheno.variance[1]+offset)
+  projres$control2_low[i]=sigma2toauc(tmp$pheno.variance[2]+offset)
+  projres$control2_high[i]=sigma2toauc(tmp$pheno.variance[3]+offset)
+  neff=1/(1/(projres$n[i]*3) +1/projres$n[i])
+  tmp=projection(est,v,n=neff,CI=TRUE)
+  projres$control3[i]=sigma2toauc(tmp$pheno.variance[1]+offset)
+  projres$control3_low[i]=sigma2toauc(tmp$pheno.variance[2]+offset)
+  projres$control3_high[i]=sigma2toauc(tmp$pheno.variance[3]+offset)
+  neff=1/(1/(projres$n[i]*4) +1/projres$n[i])
+  tmp=projection(est,v,n=neff,CI=TRUE)
+  projres$control4[i]=sigma2toauc(tmp$pheno.variance[1]+offset)
+  projres$control4_low[i]=sigma2toauc(tmp$pheno.variance[2]+offset)
+  projres$control4_high[i]=sigma2toauc(tmp$pheno.variance[3]+offset)
+  neff=1/(0.2/projres$n[i] +1/projres$n[i])
+  tmp=projection(est,v,n=neff,CI=TRUE)
+  projres$control5[i]=sigma2toauc(tmp$pheno.variance[1]+offset)
+  projres$control5_low[i]=sigma2toauc(tmp$pheno.variance[2]+offset)
+  projres$control5_high[i]=sigma2toauc(tmp$pheno.variance[3]+offset)
+}
+projCTfix=projres
+
 projres=data.frame(n=c(seq(5000,400000,5000)),case30k=NA,case30k_low=NA,case30k_high=NA)
 for (i in 1:nrow(projres))
 {
@@ -110,7 +168,7 @@ for (i in 1:nrow(projres))
 projCTobs=projres
 
 #res is AUC result based on meta analysis on combination of datasets, not ready
-save(projCT,file="../result/projection.RData")
+save(projCT,projCTfix,file="../result/projection1.RData")
 save(res,projCT,projCT30kcase,projct,projCTobs,projctobs,file="../result/projection.RData")
 # 
 # projres=data.frame(n=c(res$n_eff,seq(5000,100000,5000)),equal=NA,contrl10=NA,contrl1e6=NA)
@@ -204,6 +262,31 @@ threeplot1=function(data=projCT,title="CT",prefix="CT_3curve",ylim=c(0.5,0.75))
          width=16, height=8, units="in", dpi=300)
 }
 threeplot1(data=projCT,title="CT",prefix="CT_3curve2")
+
+#regenerate slide 13, where the number of cases on the X axis stops at about 405,000 (so that the length of the X axis is the same as the current slide but the space from 5,000 to 405,000 is expanded), and lines for only 1:1, 4:1, and 10:1 controls to cases are shown
+threeplot2=function(data=projCTfix,title="",prefix="CT_3curve",ylim=c(0.55,0.73))
+{
+  scatplot=ggplot(data=data,aes(x=n))+geom_line(aes(y =equal,color="Equal number of cases and controls"), alpha=0.5,linewidth=2) +
+    geom_line(aes(y = control4,color="Control case ratio 4:1"), alpha=0.5,linewidth=2) +
+    geom_line(aes(y = control10,color="Control case ratio 10:1"), alpha=0.5,linewidth=2) +
+    scale_colour_manual("", 
+                        breaks = c("Equal number of cases and controls", "Control case ratio 4:1", "Control case ratio 10:1"),
+                        values = c("#3C5488FF", "#00A087FF","#E64B35FF")) + ylim(ylim) +
+    labs(x = "Number of cases in the GWAS for training PRS",
+         y = "AUC",
+         linetype = "",
+         title = title)+
+    theme_Publication()+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+    scale_x_continuous(breaks=seq(5000,405000,10000)) + theme(legend.position = "top",legend.text=element_text(size=18))
+  
+  scatplot
+  
+  ggsave(filename=paste0("../result/",prefix,".png"),
+         plot=scatplot, device="png",
+         width=16, height=8, units="in", dpi=300)
+}
+threeplot2(data=projCTfix[projCTfix$n<=405000,],title="",prefix="CT_3curve3_fix")
+
 
 equal2=data.frame(n=projct$n,ct=projct$equal,ct_low=projct$equal_low,ct_high=projct$equal_high,
                   ldpred=projld$equal,ldpred_low=projld$equal_low,ldpred_high=projld$equal_high)

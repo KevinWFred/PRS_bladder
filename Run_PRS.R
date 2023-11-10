@@ -296,7 +296,8 @@ tmp2=read.table("../result/Bladder1_gwas24.sscore")
 cor(tmp1$V4,tmp2$V5)
 #[1] 0.9974624
 prs_24gwas=read.table("../result/Bladder_gwas24.sscore")
-
+cmd=paste0("/usr/local/apps/plink/2.3-alpha/plink2 --pfile ../result/gwas_24snp/Bladder_gwas24 --recode A-transpose --out ../result/gwas_24snp/Bladder_gwas24")
+system(cmd)
 runCT=function(sumstatfile="../result/six10k_sumstats.txt",prefix_tun="../result/six10k_train",prefix_val="../result/six10k_test",outprefix="six10k")
 {
   #CT method

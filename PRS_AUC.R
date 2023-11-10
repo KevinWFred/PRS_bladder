@@ -637,6 +637,13 @@ methypheno$tobacco_cig_day=as.numeric(methypheno$`tobacco cig/day`)
 methypheno$tobacco_cig_day[which(methypheno$cig_stat=="Never")]=0
 methypheno$tobacco_duration[which(methypheno$cig_stat=="Never")]
 
+tmp=phenotype[phenotype$study %in% c("ATBC","PLCO"),]
+tmp=tmp[,c("study","study_pid","pid","id","gwas_id","sid","TGSID")]
+write.csv(tmp,file="../result/PLCO_ATBC_sampleid.csv",row.names = F,quote=F)
+methdat1=read.csv("../data/ImperialBladderCancer_PC1var.csv")
+all(methdat1$TargetID==methypheno$TargetID)
+cor(methdat1$PC1,methypheno$Methylation,use="complete")
+methypheno$Methylation1=methdat1$PC1.28
 table(is.na(methypheno$Methylation))
 # FALSE  TRUE 
 # 1598    40 
@@ -667,6 +674,11 @@ exp(tmp1)
 
 fm=glm("CaseStatus~Study",data=methypheno,family = binomial)
 fm=glm("CaseStatus~Methylation",data=methypheno,family = binomial)
+fm=glm("CaseStatus~Methylation1",data=methypheno,family = binomial)
+summary(fm)$coefficients
+# Estimate Std. Error    z value     Pr(>|z|)
+# (Intercept)  -0.0458885 0.05214911 -0.8799479 3.788875e-01
+# Methylation1 -0.1395206 0.01665908 -8.3750497 5.520056e-17
 predicted1 <- predict(fm,methypheno, type="response")
 auc1=as.numeric(pROC::auc(methypheno$CaseStatus,predicted1,quiet=T))
 fm=glm("CaseStatus~cg05575921",data=methypheno,family = binomial)
@@ -677,6 +689,7 @@ predicted3 <- predict(fm,methypheno, type="response")
 auc3=as.numeric(pROC::auc(methypheno$CaseStatus,predicted3,quiet=T))
 
 fm=glm("CaseStatus~Methylation",data=PLCOdat,family = binomial)
+fm=glm("CaseStatus~Methylation1",data=PLCOdat,family = binomial)
 fm=glm("CaseStatus~cg05575921",data=PLCOdat,family = binomial)
 fm=glm("CaseStatus~cg03636183",data=PLCOdat,family = binomial)
 summary(fm)

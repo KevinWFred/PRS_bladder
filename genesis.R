@@ -36,3 +36,16 @@ v <- fit3$estimates$`Covariance matrix of parameter estimates` # the covariance 
 save(fit2,fit3,file="../result/GENESIS.RData")
 
 #sbatch --mem=64g --cpus-per-task=41 --time=17:00:00 --gres=lscratch:64  /data/BB_Bioinformatics/Kevin/GWAS_Bladder/code/genesis.R
+
+#estimate chip heritability
+gwasdat2=as.data.frame(read_excel("../data/Supplemental Tables_R1_clean.xlsx",sheet=16,skip=2))
+gwasdat2=gwasdat2[1:24,]
+sumchip=0
+for (i in 1:nrow(gwasdat2))
+{
+  se=log(gwasdat2$OR[i])/qnorm(gwasdat2$`P-value`[i]/2)
+  sumchip=sumchip+2*gwasdat2$frequency[i]*(1-gwasdat2$frequency[i])*(log(gwasdat2$OR[i])^2-se^2)
+}
+sumchip #0.1908
+fit3$estimates$`Total heritability in log-odds-ratio scale (sd)` #"0.63 (0.1283)"
+sumchip/0.63 #0.303
